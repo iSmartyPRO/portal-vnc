@@ -124,7 +124,6 @@ void RfbServer::serveClient(TlsConn& conn) {
   init.insert(init.end(), name, name + std::strlen(name));
   if (!conn.writeFull(init.data(), init.size())) return;
 
-  InputInjector input(frame.width, frame.height);
   Frame lastSent;  // empty => next update is full
 
   conn.setRecvTimeout(20);
@@ -163,13 +162,13 @@ void RfbServer::serveClient(TlsConn& conn) {
           if (!conn.readFull(buf, sizeof(buf))) return;
           bool down = buf[0] != 0;
           uint32_t key = rdU32(buf + 3);
-          input.key(key, down);
+          hub_.enqueueKey(key, down);
           break;
         }
         case rfb::kPointerEvent: {
           uint8_t buf[5];
           if (!conn.readFull(buf, sizeof(buf))) return;
-          input.pointer(buf[0], rdU16(buf + 1), rdU16(buf + 3));
+          hub_.enqueuePointer(buf[0], rdU16(buf + 1), rdU16(buf + 3));
           break;
         }
         case rfb::kClientCutText: {

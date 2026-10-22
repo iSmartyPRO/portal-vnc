@@ -16,6 +16,9 @@ class InputInjector {
   // RFB KeyEvent: X11 keysym, down=true on press.
   void key(uint32_t keysym, bool down);
 
+  int width() const { return w_; }
+  int height() const { return h_; }
+
  private:
   int w_, h_;
   uint8_t lastButtons_ = 0;

@@ -1,6 +1,15 @@
-// PortalVNC agent: loads config.json, serves the desktop over RFB-in-mTLS.
-// This build runs as a console process; the Windows service wrapper and the
-// secure-desktop helper are later plans.
+// PortalVNC agent entry point.
+//
+// Modes:
+//   --install      register the Windows service (run as admin)
+//   --uninstall    remove the Windows service
+//   --service      run under the SCM (used by the service binary path)
+//   --worker       run the agent in the current session (launched by the service)
+//   --config PATH  run as a console agent for development (default)
+//
+// The service is a thin supervisor that launches "--worker" as SYSTEM in the
+// active session; the worker does capture/input/RFB and follows the active
+// desktop (lock screen / UAC).
 #include <windows.h>
 
 #include <cstdio>
@@ -8,6 +17,8 @@
 
 #include "config.h"
 #include "rfb_server.h"
+#include "service.h"
+#include "tray.h"
 
 using namespace pvnc;
 
@@ -23,14 +34,7 @@ static std::string exeDir() {
   return s;
 }
 
-int main(int argc, char** argv) {
-  std::string configPath;
-  for (int i = 1; i < argc; ++i) {
-    std::string a = argv[i];
-    if (a == "--config" && i + 1 < argc) configPath = argv[++i];
-  }
-  if (configPath.empty()) configPath = exeDir() + "\\config.json";
-
+static int runAgent(const std::string& configPath) {
   AgentConfig cfg;
   try {
     cfg = loadConfig(configPath);
@@ -38,19 +42,44 @@ int main(int argc, char** argv) {
     std::fprintf(stderr, "config error (%s): %s\n", configPath.c_str(), e.what());
     return 1;
   }
-
   if (cfg.tlsCert.empty() || cfg.tlsKey.empty() || cfg.tlsCa.empty()) {
     std::fprintf(stderr, "config %s: tls.cert/key/ca are required\n", configPath.c_str());
     return 1;
   }
 
+  TrayIcon tray;
+  if (cfg.trayIcon) tray.start();
+
   std::printf("PortalVNC agent listening on %s:%u (tray=%s)\n",
               cfg.listenAddress.c_str(), cfg.port, cfg.trayIcon ? "on" : "off");
   RfbServer server(cfg);
+  int rc;
   try {
-    return server.run();
+    rc = server.run();
   } catch (const std::exception& e) {
     std::fprintf(stderr, "fatal: %s\n", e.what());
-    return 5;
+    rc = 5;
   }
+  tray.stop();
+  return rc;
+}
+
+int main(int argc, char** argv) {
+  std::string configPath;
+  std::string mode;  // install|uninstall|service|worker|console
+  for (int i = 1; i < argc; ++i) {
+    std::string a = argv[i];
+    if (a == "--install") mode = "install";
+    else if (a == "--uninstall") mode = "uninstall";
+    else if (a == "--service") mode = "service";
+    else if (a == "--worker") mode = "worker";
+    else if (a == "--config" && i + 1 < argc) configPath = argv[++i];
+  }
+  if (configPath.empty()) configPath = exeDir() + "\\config.json";
+
+  if (mode == "install") return installService();
+  if (mode == "uninstall") return uninstallService();
+  if (mode == "service") return runService();
+  // "worker" and default: run the agent in this session.
+  return runAgent(configPath);
 }
