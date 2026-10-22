@@ -1,0 +1,24 @@
+# Build output
+build/
+out/
+vcpkg_installed/
+*.user
+*.obj
+*.exe
+*.pdb
+*.ilk
+
+# vcpkg (checked out as submodule / local clone, not committed)
+/vcpkg/
+
+# Dev certificates and local secrets (never commit)
+certs/
+*.key
+*.crt
+*.pem
+!docs/**/*.pem
+
+# IDE
+.vs/
+.vscode/
+CMakeSettings.json

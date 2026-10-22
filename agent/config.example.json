@@ -1,0 +1,15 @@
+{
+  "trayIcon": false,
+  "listenAddress": "0.0.0.0",
+  "port": 7654,
+  "tls": {
+    "cert": "C:\\ProgramData\\PortalVNC\\agent.crt",
+    "key": "C:\\ProgramData\\PortalVNC\\agent.key",
+    "ca": "C:\\ProgramData\\PortalVNC\\devca.crt"
+  },
+  "allowedClients": ["127.0.0.1", "10.0.0.0/8"],
+  "access": {
+    "sids": []
+  },
+  "logFile": "C:\\ProgramData\\PortalVNC\\pvnc-agent.log"
+}

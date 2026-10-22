@@ -1,0 +1,14 @@
+{
+  "name": "portalvnc",
+  "version-string": "0.1.0",
+  "description": "Secure interactive remote access to Windows machines (VNC-based).",
+  "homepage": "https://github.com/iSmartyPRO/PortalVNC",
+  "license": "GPL-3.0-or-later",
+  "dependencies": [
+    "mbedtls",
+    "nlohmann-json",
+    "catch2"
+  ],
+  "builtin-baseline": "67972e92edd181d433927b42d8ab4bfa52ac164a",
+  "overrides": []
+}
