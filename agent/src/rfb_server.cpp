@@ -86,6 +86,11 @@ RfbServer::~RfbServer() { stop(); }
 
 void RfbServer::stop() { running_.store(false); }
 
+void RfbServer::startForTest() {
+  running_.store(true);
+  hub_.start();
+}
+
 void RfbServer::serveClient(TlsConn& conn) {
   // --- RFB 3.8 handshake (security None; we already authenticated) ---
   if (!conn.writeFull(rfb::kVersion38, rfb::kVersionLen)) return;

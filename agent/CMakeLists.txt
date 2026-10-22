@@ -26,6 +26,7 @@ add_executable(pvnc_agent_tests
   test/test_config.cpp
   test/test_capture.cpp
   test/test_rfb_server.cpp
+  test/test_integration.cpp
 )
-target_link_libraries(pvnc_agent_tests PRIVATE pvnc_agent_core Catch2::Catch2WithMain)
+target_link_libraries(pvnc_agent_tests PRIVATE pvnc_agent_core Catch2::Catch2WithMain ws2_32)
 add_test(NAME agent COMMAND pvnc_agent_tests)

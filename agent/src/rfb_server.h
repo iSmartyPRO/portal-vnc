@@ -33,6 +33,11 @@ class RfbServer {
   // Exposed for testing with a loopback TLS pair.
   void serveClient(TlsConn& conn);
 
+  // Test seam: marks the server running and starts the capture hub so that
+  // serveClient() can be exercised directly over a loopback TLS pair without
+  // going through accept()/auth.
+  void startForTest();
+
  private:
   AgentConfig cfg_;
   CaptureHub hub_;
