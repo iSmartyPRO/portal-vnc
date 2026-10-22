@@ -97,7 +97,6 @@ void ViewerWindow::sendPointer(HWND h, WPARAM wParam, int cx, int cy, int wheel)
   if (wParam & MK_LBUTTON) b |= 0x01;
   if (wParam & MK_MBUTTON) b |= 0x02;
   if (wParam & MK_RBUTTON) b |= 0x04;
-  buttons_ = b;
 
   if (wheel > 0) { client_.pushPointer(b | 0x08, rx, ry); client_.pushPointer(b, rx, ry); }
   else if (wheel < 0) { client_.pushPointer(b | 0x10, rx, ry); client_.pushPointer(b, rx, ry); }

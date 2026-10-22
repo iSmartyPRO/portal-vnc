@@ -8,7 +8,6 @@
 #include <thread>
 #include <vector>
 
-#include "input.h"
 #include "pvnc/auth.h"
 #include "pvnc/handshake.h"
 #include "pvnc/rfb.h"
@@ -208,7 +207,7 @@ void RfbServer::serveClient(TlsConn& conn) {
 
 int RfbServer::run() {
   ensureWinsock();
-  TlsContext ctx = TlsContext::server(cfg_.tlsCa, cfg_.tlsCert, cfg_.tlsKey);
+  tls_ = std::make_unique<TlsContext>(TlsContext::server(cfg_.tlsCa, cfg_.tlsCert, cfg_.tlsKey));
 
   SOCKET listener = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
   if (listener == INVALID_SOCKET) return 2;
@@ -244,10 +243,10 @@ int RfbServer::run() {
       continue;
     }
 
-    std::thread([this, raw, &ctx] {
+    std::thread([this, raw] {
       TlsConn conn;
       try {
-        conn = ctx.accept(raw);
+        conn = tls_->accept(raw);
       } catch (...) {
         closesocket(raw);
         return;  // bad/missing client cert: TLS rejected

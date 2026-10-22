@@ -24,7 +24,6 @@ class ViewerWindow {
 
   RfbClient& client_;
   HWND hwnd_ = nullptr;
-  uint8_t buttons_ = 0;
 };
 
 }  // namespace pvnc

@@ -71,8 +71,10 @@ class TlsContext {
   static TlsContext client(const std::string& caPath, const std::string& certPath,
                            const std::string& keyPath);
 
-  TlsContext(TlsContext&&) noexcept = default;
-  TlsContext& operator=(TlsContext&&) noexcept = default;
+  // Defined out-of-line (in tls.cpp) so the pimpl `Impl` need not be complete
+  // where a TlsContext is moved or stored in a smart pointer.
+  TlsContext(TlsContext&&) noexcept;
+  TlsContext& operator=(TlsContext&&) noexcept;
   ~TlsContext();
 
   // Perform the TLS handshake over an already-connected raw socket.

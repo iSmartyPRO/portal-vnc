@@ -1,5 +1,6 @@
 #pragma once
 #include <atomic>
+#include <memory>
 
 #include "capture_hub.h"
 #include "config.h"
@@ -42,6 +43,9 @@ class RfbServer {
   AgentConfig cfg_;
   CaptureHub hub_;
   std::atomic<bool> running_{false};
+  // Owns the TLS server context for the lifetime of the server object so that
+  // detached per-client threads never reference a destroyed stack local.
+  std::unique_ptr<TlsContext> tls_;
 };
 
 }  // namespace pvnc

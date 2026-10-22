@@ -84,6 +84,8 @@ struct TlsContext::Impl {
 
 TlsContext::TlsContext() : d_(std::make_unique<Impl>()) {}
 TlsContext::~TlsContext() = default;
+TlsContext::TlsContext(TlsContext&&) noexcept = default;
+TlsContext& TlsContext::operator=(TlsContext&&) noexcept = default;
 
 void TlsContext::load(const std::string& caPath, const std::string& certPath,
                       const std::string& keyPath, bool isServer) {
@@ -214,22 +216,22 @@ TlsConn::~TlsConn() { close(); }
 
 long TlsConn::read(void* buf, size_t len) {
   if (!ssl_) return -1;
-  int n = mbedtls_ssl_read(ssl_.get(), static_cast<unsigned char*>(buf), len);
-  if (n == MBEDTLS_ERR_SSL_PEER_CLOSE_NOTIFY) return 0;
-  if (n < 0) {
-    if (n == MBEDTLS_ERR_SSL_WANT_READ || n == MBEDTLS_ERR_SSL_WANT_WRITE) return read(buf, len);
-    return -1;
+  for (;;) {
+    int n = mbedtls_ssl_read(ssl_.get(), static_cast<unsigned char*>(buf), len);
+    if (n == MBEDTLS_ERR_SSL_PEER_CLOSE_NOTIFY) return 0;
+    if (n == MBEDTLS_ERR_SSL_WANT_READ || n == MBEDTLS_ERR_SSL_WANT_WRITE) continue;
+    if (n < 0) return -1;
+    return n;
   }
-  return n;
 }
 long TlsConn::write(const void* buf, size_t len) {
   if (!ssl_) return -1;
-  int n = mbedtls_ssl_write(ssl_.get(), static_cast<const unsigned char*>(buf), len);
-  if (n < 0) {
-    if (n == MBEDTLS_ERR_SSL_WANT_READ || n == MBEDTLS_ERR_SSL_WANT_WRITE) return write(buf, len);
-    return -1;
+  for (;;) {
+    int n = mbedtls_ssl_write(ssl_.get(), static_cast<const unsigned char*>(buf), len);
+    if (n == MBEDTLS_ERR_SSL_WANT_READ || n == MBEDTLS_ERR_SSL_WANT_WRITE) continue;
+    if (n < 0) return -1;
+    return n;
   }
-  return n;
 }
 bool TlsConn::readFull(void* buf, size_t len) {
   auto* p = static_cast<uint8_t*>(buf);

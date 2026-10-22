@@ -10,6 +10,8 @@
 
 #include <ws2tcpip.h>
 
+#include "pvnc/tls.h"
+
 namespace pvnc {
 
 namespace {
@@ -63,6 +65,7 @@ bool parseIpv4(const std::string& s, uint32_t& out) {
 
 bool isClientAllowed(const std::string& ip, const std::vector<std::string>& allowed) {
   if (allowed.empty()) return false;  // empty allow-list denies everyone
+  ensureWinsock();  // inet_pton needs Winsock initialised; make this self-sufficient
   uint32_t client = 0;
   if (!parseIpv4(ip, client)) return false;
 

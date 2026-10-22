@@ -19,11 +19,15 @@ const cfg = JSON.parse(fs.readFileSync(CONFIG, 'utf8'));
 const PORT = cfg.listenPort || 8787;
 const sessions = cfg.sessions || {}; // token -> { host, port, caPath, certPath, keyPath, username, domain, password }
 
-// Serve the static noVNC test page from ./public.
+// Serve the static noVNC test page from ./public (confined to that directory).
+const PUBLIC_DIR = path.resolve(__dirname, 'public');
 const server = http.createServer((req, res) => {
-  let p = req.url.split('?')[0];
+  let p = decodeURIComponent(req.url.split('?')[0]);
   if (p === '/') p = '/index.html';
-  const file = path.join(__dirname, 'public', path.normalize(p).replace(/^(\.\.[/\\])+/, ''));
+  const file = path.resolve(PUBLIC_DIR, '.' + path.posix.normalize(p));
+  if (file !== PUBLIC_DIR && !file.startsWith(PUBLIC_DIR + path.sep)) {
+    res.writeHead(403); res.end('forbidden'); return;
+  }
   fs.readFile(file, (err, data) => {
     if (err) { res.writeHead(404); res.end('not found'); return; }
     const ext = path.extname(file);
