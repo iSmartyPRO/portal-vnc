@@ -22,3 +22,6 @@ certs/
 .vs/
 .vscode/
 CMakeSettings.json
+
+# Node
+node_modules/

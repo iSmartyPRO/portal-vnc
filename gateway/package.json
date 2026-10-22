@@ -1,0 +1,10 @@
+{
+  "name": "portalvnc-gateway",
+  "version": "0.1.0",
+  "description": "Browser<->agent bridge: terminates WebSocket, speaks PortalVNC mTLS to the agent, relays RFB. Pairs with noVNC in the browser.",
+  "license": "GPL-3.0-or-later",
+  "type": "commonjs",
+  "main": "pvnc.js",
+  "scripts": { "start": "node server.js" },
+  "dependencies": { "ws": "^8.18.0" }
+}

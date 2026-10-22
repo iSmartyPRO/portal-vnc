@@ -1,0 +1,16 @@
+{
+  "listenPort": 8787,
+  "_comment": "In production the portal fills this role: it mints one-time tokens and holds the credential vault. Here, each token maps to a target + Windows credentials. Keep real credentials OUT of version control.",
+  "sessions": {
+    "REPLACE_WITH_ONE_TIME_TOKEN": {
+      "host": "192.168.1.50",
+      "port": 7654,
+      "caPath": "C:\\ProgramData\\PortalVNC\\devca.crt",
+      "certPath": "C:\\ProgramData\\PortalVNC\\client.crt",
+      "keyPath": "C:\\ProgramData\\PortalVNC\\client.key",
+      "username": "administrator",
+      "domain": "CORP",
+      "password": "from-portal-vault-never-hardcoded"
+    }
+  }
+}
