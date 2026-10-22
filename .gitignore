@@ -25,3 +25,8 @@ CMakeSettings.json
 
 # Node
 node_modules/
+
+# Installer artifacts
+*.msi
+*.wixpdb
+installer/*.wixpdb

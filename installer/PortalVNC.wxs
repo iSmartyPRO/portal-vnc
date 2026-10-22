@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  PortalVNC agent MSI.
+  Installs the agent, a config template and (optionally) certificates into
+  C:\Program Files\PortalVNC, registers the Windows service, and opens the
+  listening port in the firewall. GPO-deployable (per-machine).
+
+  Build (see build-msi.ps1):
+    wix build PortalVNC.wxs -ext WixToolset.Firewall.wixext ^
+      -d AgentExe=..\build\agent\Release\pvnc-agent.exe ^
+      -d ConfigSrc=config.install.json -d Port=7654 -o PortalVNC.msi
+
+  Provisioning certificates (agent.crt/key, devca.crt) and the real config.json
+  with allowedClients + SIDs is done by GPO file-copy or an MSI transform; the
+  installed config.json is a template pointing at the install directory.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:fw="http://wixtoolset.org/schemas/v4/wxs/firewall">
+
+  <Package Name="PortalVNC Agent"
+           Manufacturer="PortalVNC"
+           Version="0.1.0"
+           UpgradeCode="7F1C2A54-6B0E-4E2D-9C3A-2E7B9A1D5C40"
+           Scope="perMachine"
+           Compressed="yes">
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of PortalVNC is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="PortalVNC" />
+    </StandardDirectory>
+
+    <ComponentGroup Id="AgentFiles" Directory="INSTALLFOLDER">
+      <!-- The agent binary + the Windows service, started automatically. -->
+      <Component Id="AgentExe" Guid="*">
+        <File Id="pvnc_agent_exe" Source="$(var.AgentExe)" KeyPath="yes" Name="pvnc-agent.exe" />
+
+        <ServiceInstall Id="PvncService"
+                        Name="PortalVNC"
+                        DisplayName="PortalVNC Agent"
+                        Description="PortalVNC secure remote access agent."
+                        Type="ownProcess"
+                        Start="auto"
+                        ErrorControl="normal"
+                        Account="LocalSystem"
+                        Arguments="--service" />
+        <ServiceControl Id="PvncServiceControl"
+                        Name="PortalVNC"
+                        Start="install"
+                        Stop="both"
+                        Remove="uninstall"
+                        Wait="yes" />
+
+        <!-- Open the listening port for inbound TCP. Tighten the scope to the
+             portal/gateway host via GPO or a transform in production. -->
+        <fw:FirewallException Id="PvncPort"
+                              Name="PortalVNC"
+                              Port="$(var.Port)"
+                              Protocol="tcp"
+                              Scope="any"
+                              Profile="all" />
+      </Component>
+
+      <!-- Config template (does not overwrite an existing provisioned config). -->
+      <Component Id="ConfigTemplate" Guid="*" NeverOverwrite="yes">
+        <File Id="config_json" Source="$(var.ConfigSrc)" Name="config.json" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+
+    <Feature Id="Main" Title="PortalVNC Agent" Level="1">
+      <ComponentGroupRef Id="AgentFiles" />
+    </Feature>
+  </Package>
+</Wix>
