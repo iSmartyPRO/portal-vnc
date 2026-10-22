@@ -34,7 +34,7 @@ static std::string exeDir() {
   return s;
 }
 
-static int runAgent(const std::string& configPath) {
+static int runAgent(const std::string& configPath, uint16_t portOverride) {
   AgentConfig cfg;
   try {
     cfg = loadConfig(configPath);
@@ -42,6 +42,7 @@ static int runAgent(const std::string& configPath) {
     std::fprintf(stderr, "config error (%s): %s\n", configPath.c_str(), e.what());
     return 1;
   }
+  if (portOverride != 0) cfg.port = portOverride;
   if (cfg.tlsCert.empty() || cfg.tlsKey.empty() || cfg.tlsCa.empty()) {
     std::fprintf(stderr, "config %s: tls.cert/key/ca are required\n", configPath.c_str());
     return 1;
@@ -67,6 +68,7 @@ static int runAgent(const std::string& configPath) {
 int main(int argc, char** argv) {
   std::string configPath;
   std::string mode;  // install|uninstall|service|worker|console
+  uint16_t portOverride = 0;
   for (int i = 1; i < argc; ++i) {
     std::string a = argv[i];
     if (a == "--install") mode = "install";
@@ -74,6 +76,7 @@ int main(int argc, char** argv) {
     else if (a == "--service") mode = "service";
     else if (a == "--worker") mode = "worker";
     else if (a == "--config" && i + 1 < argc) configPath = argv[++i];
+    else if (a == "--port" && i + 1 < argc) portOverride = (uint16_t)std::atoi(argv[++i]);
   }
   if (configPath.empty()) configPath = exeDir() + "\\config.json";
 
@@ -81,5 +84,5 @@ int main(int argc, char** argv) {
   if (mode == "uninstall") return uninstallService();
   if (mode == "service") return runService();
   // "worker" and default: run the agent in this session.
-  return runAgent(configPath);
+  return runAgent(configPath, portOverride);
 }

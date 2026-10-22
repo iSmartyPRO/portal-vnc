@@ -5,7 +5,11 @@
 #include <userenv.h>
 
 #include <cstdio>
+#include <map>
+#include <set>
 #include <string>
+
+#include "config.h"
 
 #pragma comment(lib, "wtsapi32.lib")
 #pragma comment(lib, "userenv.lib")
@@ -39,9 +43,29 @@ void reportStatus(DWORD state, DWORD waitHint = 0) {
   SetServiceStatus(g_statusHandle, &g_status);
 }
 
-// Launches the agent as SYSTEM in `sessionId` on the interactive desktop.
-// Returns the process handle (caller closes), or nullptr on failure.
-HANDLE launchWorker(DWORD sessionId) {
+std::string exeDirA() {
+  wchar_t buf[MAX_PATH];
+  GetModuleFileNameW(nullptr, buf, MAX_PATH);
+  std::wstring w(buf);
+  auto s = w.find_last_of(L"\\/");
+  std::wstring dir = (s == std::wstring::npos) ? L"." : w.substr(0, s);
+  int n = WideCharToMultiByte(CP_UTF8, 0, dir.data(), (int)dir.size(), nullptr, 0, nullptr, nullptr);
+  std::string out(n, '\0');
+  WideCharToMultiByte(CP_UTF8, 0, dir.data(), (int)dir.size(), out.data(), n, nullptr, nullptr);
+  return out;
+}
+
+// Base listening port from config.json next to the exe (default 7654).
+uint16_t basePort() {
+  try {
+    AgentConfig c = loadConfig(exeDirA() + "\\config.json");
+    return c.port;
+  } catch (...) { return 7654; }
+}
+
+// Launches the agent as SYSTEM in `sessionId` on the interactive desktop,
+// listening on `port`. Returns the process handle (caller closes), or nullptr.
+HANDLE launchWorker(DWORD sessionId, uint16_t port) {
   HANDLE procToken = nullptr;
   if (!OpenProcessToken(GetCurrentProcess(), TOKEN_DUPLICATE | TOKEN_QUERY | TOKEN_ASSIGN_PRIMARY,
                         &procToken))
@@ -62,7 +86,7 @@ HANDLE launchWorker(DWORD sessionId) {
   LPVOID env = nullptr;
   CreateEnvironmentBlock(&env, dup, FALSE);
 
-  std::wstring cmd = L"\"" + exePath() + L"\" --worker";
+  std::wstring cmd = L"\"" + exePath() + L"\" --worker --port " + std::to_wstring(port);
   std::wstring desktop = L"winsta0\\default";
 
   STARTUPINFOW si{};
@@ -101,29 +125,68 @@ DWORD WINAPI handlerEx(DWORD control, DWORD eventType, LPVOID, LPVOID) {
   }
 }
 
-void supervise() {
-  HANDLE worker = nullptr;
-  for (;;) {
-    DWORD session = WTSGetActiveConsoleSessionId();
-    if (session != 0xFFFFFFFF) {
-      if (worker) { TerminateProcess(worker, 0); CloseHandle(worker); worker = nullptr; }
-      worker = launchWorker(session);
-    }
+// The set of sessions we should be serving right now: the active console
+// session plus any connected/active RDP sessions that have a logged-in user.
+std::set<DWORD> targetSessions() {
+  std::set<DWORD> out;
+  DWORD console = WTSGetActiveConsoleSessionId();
+  if (console != 0xFFFFFFFF) out.insert(console);
 
-    HANDLE waits[3] = {g_stopEvent, g_sessionEvent, worker};
-    DWORD count = worker ? 3 : 2;
-    DWORD r = WaitForMultipleObjects(count, waits, FALSE,
-                                     worker ? INFINITE : 3000);
-    if (r == WAIT_OBJECT_0) break;                 // stop
-    if (r == WAIT_OBJECT_0 + 1) { ResetEvent(g_sessionEvent); continue; }  // session change
-    if (worker && r == WAIT_OBJECT_0 + 2) {        // worker died: relaunch shortly
-      CloseHandle(worker); worker = nullptr;
-      Sleep(1000);
-      continue;
+  PWTS_SESSION_INFOW info = nullptr;
+  DWORD count = 0;
+  if (WTSEnumerateSessionsW(WTS_CURRENT_SERVER_HANDLE, 0, 1, &info, &count)) {
+    for (DWORD i = 0; i < count; ++i) {
+      if (info[i].State == WTSActive) out.insert(info[i].SessionId);
     }
-    // timeout with no worker: loop and retry to find a session
+    WTSFreeMemory(info);
   }
-  if (worker) { TerminateProcess(worker, 0); CloseHandle(worker); }
+  return out;
+}
+
+// Port for a session: the base port for the active console session, base+id
+// for additional (RDP) sessions, so the common single-user case stays on base.
+uint16_t portForSession(DWORD sessionId, DWORD console, uint16_t base) {
+  if (sessionId == console) return base;
+  return uint16_t(base + sessionId);
+}
+
+void supervise() {
+  const uint16_t base = basePort();
+  std::map<DWORD, HANDLE> workers;  // sessionId -> process
+
+  auto reconcile = [&]() {
+    DWORD console = WTSGetActiveConsoleSessionId();
+    std::set<DWORD> want = targetSessions();
+
+    // Drop workers for sessions that are gone or whose process exited.
+    for (auto it = workers.begin(); it != workers.end();) {
+      bool dead = WaitForSingleObject(it->second, 0) == WAIT_OBJECT_0;
+      if (want.find(it->first) == want.end() || dead) {
+        if (!dead) TerminateProcess(it->second, 0);
+        CloseHandle(it->second);
+        it = workers.erase(it);
+      } else {
+        ++it;
+      }
+    }
+    // Start workers for sessions we want but don't have.
+    for (DWORD s : want) {
+      if (workers.find(s) == workers.end()) {
+        HANDLE h = launchWorker(s, portForSession(s, console, base));
+        if (h) workers[s] = h;
+      }
+    }
+  };
+
+  for (;;) {
+    reconcile();
+    HANDLE waits[2] = {g_stopEvent, g_sessionEvent};
+    DWORD r = WaitForMultipleObjects(2, waits, FALSE, 5000);
+    if (r == WAIT_OBJECT_0) break;                      // stop
+    if (r == WAIT_OBJECT_0 + 1) ResetEvent(g_sessionEvent);  // session change -> reconcile
+    // timeout -> periodic reconcile (also catches crashed workers)
+  }
+  for (auto& kv : workers) { TerminateProcess(kv.second, 0); CloseHandle(kv.second); }
 }
 
 void WINAPI serviceMain(DWORD, LPWSTR*) {
