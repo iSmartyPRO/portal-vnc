@@ -11,5 +11,5 @@ add_executable(pvnc_viewer
 )
 target_include_directories(pvnc_viewer PRIVATE src)
 target_link_libraries(pvnc_viewer PRIVATE pvnc_protocol nlohmann_json::nlohmann_json
-  ws2_32 gdi32 user32 advapi32 shell32 comctl32)
+  ws2_32 gdi32 user32 advapi32 shell32 comctl32 msimg32)
 set_target_properties(pvnc_viewer PROPERTIES OUTPUT_NAME "pvnc-viewer" WIN32_EXECUTABLE TRUE)

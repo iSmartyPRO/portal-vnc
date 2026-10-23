@@ -99,7 +99,7 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, LPWSTR, int) {
     return 1;
   }
 
-  ViewerWindow win(client);
+  ViewerWindow win(client, info.host);
   if (!win.create(L"PortalVNC viewer")) {
     MessageBoxW(nullptr, L"Failed to create the viewer window.", L"PortalVNC", MB_ICONERROR);
     return 1;
