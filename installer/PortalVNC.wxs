@@ -19,7 +19,7 @@
 
   <Package Name="PortalVNC Agent"
            Manufacturer="PortalVNC"
-           Version="0.1.0"
+           Version="0.1.1"
            UpgradeCode="7F1C2A54-6B0E-4E2D-9C3A-2E7B9A1D5C40"
            Scope="perMachine"
            Compressed="yes">
