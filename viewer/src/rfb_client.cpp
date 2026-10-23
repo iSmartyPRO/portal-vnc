@@ -94,87 +94,114 @@ bool readGeneric(TlsConn& c, uint8_t& status, std::string& payload) {
   payload.assign(len, '\0');
   return len ? c.readFull(payload.data(), len) : true;
 }
-}  // namespace
 
-bool RfbClient::fetchSystemInfo(std::string& jsonOut) {
-  TlsConn c;
-  if (dialAndAuth(c, SessionMode::Control) != RefuseCode::None) return false;
+// --- Control opcodes over an already-authenticated control connection. These
+// are reused both by the per-call RfbClient methods and by a ControlSession
+// (which keeps one connection open for a whole batch of operations). ---
+
+bool ctlSysInfo(TlsConn& c, std::string& out) {
   uint8_t op = ctl::kSysInfo;
   if (!c.writeFull(&op, 1)) return false;
-  uint8_t status = 0;
-  if (!readGeneric(c, status, jsonOut) || status != ctl::kOk) return false;
-  return true;
+  uint8_t st = 0;
+  return readGeneric(c, st, out) && st == ctl::kOk;
 }
-
-bool RfbClient::fileList(const std::wstring& path, std::string& jsonOut) {
-  TlsConn c;
-  if (dialAndAuth(c, SessionMode::Control) != RefuseCode::None) return false;
+bool ctlFileList(TlsConn& c, const std::wstring& path, std::string& out) {
   uint8_t op = ctl::kFileList;
   if (!c.writeFull(&op, 1) || !writePath(c, path)) return false;
-  uint8_t status = 0;
-  return readGeneric(c, status, jsonOut) && status == ctl::kOk;
+  uint8_t st = 0;
+  return readGeneric(c, st, out) && st == ctl::kOk;
 }
-
-bool RfbClient::fileDownload(const std::wstring& remotePath, const std::wstring& localPath) {
-  TlsConn c;
-  if (dialAndAuth(c, SessionMode::Control) != RefuseCode::None) return false;
+bool ctlFileGet(TlsConn& c, const std::wstring& remote, const std::wstring& local) {
   uint8_t op = ctl::kFileGet;
-  if (!c.writeFull(&op, 1) || !writePath(c, remotePath)) return false;
+  if (!c.writeFull(&op, 1) || !writePath(c, remote)) return false;
   uint8_t status = 0;
   if (!c.readFull(&status, 1) || status != ctl::kOk) return false;
   uint8_t szb[8];
   if (!c.readFull(szb, 8)) return false;
   uint64_t size = 0; for (int i = 0; i < 8; ++i) size = (size << 8) | szb[i];
-  HANDLE f = CreateFileW(localPath.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS,
+  HANDLE f = CreateFileW(local.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS,
                          FILE_ATTRIBUTE_NORMAL, nullptr);
-  if (f == INVALID_HANDLE_VALUE) return false;
+  // Always consume exactly `size` bytes so a shared control connection stays in
+  // sync even if the local file cannot be created or written. `ok` reflects
+  // whether the local write actually succeeded.
   std::vector<uint8_t> buf(64 * 1024);
-  uint64_t rem = size; bool ok = true;
+  uint64_t rem = size; bool ok = (f != INVALID_HANDLE_VALUE);
   while (rem > 0) {
     size_t want = (size_t)(rem < buf.size() ? rem : buf.size());
-    if (!c.readFull(buf.data(), want)) { ok = false; break; }
-    DWORD wrote = 0;
-    if (!WriteFile(f, buf.data(), (DWORD)want, &wrote, nullptr) || wrote != want) { ok = false; break; }
+    if (!c.readFull(buf.data(), want)) { ok = false; break; }  // connection error: give up
+    if (f != INVALID_HANDLE_VALUE) {
+      DWORD wrote = 0;
+      if (!WriteFile(f, buf.data(), (DWORD)want, &wrote, nullptr) || wrote != want) ok = false;
+    }
     rem -= want;
   }
-  CloseHandle(f);
+  if (f != INVALID_HANDLE_VALUE) CloseHandle(f);
   return ok;
 }
-
-bool RfbClient::fileMkdir(const std::wstring& remotePath) {
-  TlsConn c;
-  if (dialAndAuth(c, SessionMode::Control) != RefuseCode::None) return false;
-  uint8_t op = ctl::kMkDir;
-  if (!c.writeFull(&op, 1) || !writePath(c, remotePath)) return false;
-  uint8_t status = 0; std::string resp;
-  return readGeneric(c, status, resp) && status == ctl::kOk;
-}
-
-bool RfbClient::fileUpload(const std::wstring& localPath, const std::wstring& remotePath) {
-  HANDLE f = CreateFileW(localPath.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
+bool ctlFilePut(TlsConn& c, const std::wstring& local, const std::wstring& remote) {
+  HANDLE f = CreateFileW(local.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
                          FILE_ATTRIBUTE_NORMAL, nullptr);
   if (f == INVALID_HANDLE_VALUE) return false;
   LARGE_INTEGER sz{}; GetFileSizeEx(f, &sz);
-  TlsConn c;
-  if (dialAndAuth(c, SessionMode::Control) != RefuseCode::None) { CloseHandle(f); return false; }
   uint8_t op = ctl::kFilePut;
-  if (!c.writeFull(&op, 1) || !writePath(c, remotePath)) { CloseHandle(f); return false; }
+  if (!c.writeFull(&op, 1) || !writePath(c, remote)) { CloseHandle(f); return false; }
   uint8_t szb[8]; uint64_t size = (uint64_t)sz.QuadPart;
   for (int i = 0; i < 8; ++i) szb[i] = uint8_t(size >> ((7 - i) * 8));
   if (!c.writeFull(szb, 8)) { CloseHandle(f); return false; }
+  // We committed to sending exactly `size` bytes; always send that many (zero-
+  // padding any short local read) so the shared connection stays in sync. `ok`
+  // reflects whether the full file was actually read.
   std::vector<uint8_t> buf(64 * 1024);
   uint64_t rem = size; bool ok = true;
   while (rem > 0) {
     DWORD want = (DWORD)(rem < buf.size() ? rem : buf.size()), got = 0;
-    if (!ReadFile(f, buf.data(), want, &got, nullptr) || got == 0) { ok = false; break; }
-    if (!c.writeFull(buf.data(), got)) { ok = false; break; }
-    rem -= got;
+    if (!ReadFile(f, buf.data(), want, &got, nullptr) || got < want) {
+      if (got < want) { memset(buf.data() + got, 0, want - got); ok = false; }
+    }
+    if (!c.writeFull(buf.data(), want)) { CloseHandle(f); return false; }  // connection error
+    rem -= want;
   }
   CloseHandle(f);
-  if (!ok) return false;
+  // Always read the agent's response (we sent `size` bytes) so the connection
+  // stays in sync, then combine with the local-read result.
   uint8_t status = 0; std::string resp;
-  return readGeneric(c, status, resp) && status == ctl::kOk;
+  bool got = readGeneric(c, status, resp);
+  return ok && got && status == ctl::kOk;
 }
+bool ctlMkdir(TlsConn& c, const std::wstring& remote) {
+  uint8_t op = ctl::kMkDir;
+  if (!c.writeFull(&op, 1) || !writePath(c, remote)) return false;
+  uint8_t st = 0; std::string resp;
+  return readGeneric(c, st, resp) && st == ctl::kOk;
+}
+}  // namespace
+
+// Per-call methods: open a control connection, run one op, close.
+bool RfbClient::fetchSystemInfo(std::string& jsonOut) {
+  TlsConn c; return dialAndAuth(c, SessionMode::Control) == RefuseCode::None && ctlSysInfo(c, jsonOut);
+}
+bool RfbClient::fileList(const std::wstring& path, std::string& jsonOut) {
+  TlsConn c; return dialAndAuth(c, SessionMode::Control) == RefuseCode::None && ctlFileList(c, path, jsonOut);
+}
+bool RfbClient::fileDownload(const std::wstring& remote, const std::wstring& local) {
+  TlsConn c; return dialAndAuth(c, SessionMode::Control) == RefuseCode::None && ctlFileGet(c, remote, local);
+}
+bool RfbClient::fileUpload(const std::wstring& local, const std::wstring& remote) {
+  TlsConn c; return dialAndAuth(c, SessionMode::Control) == RefuseCode::None && ctlFilePut(c, local, remote);
+}
+bool RfbClient::fileMkdir(const std::wstring& remote) {
+  TlsConn c; return dialAndAuth(c, SessionMode::Control) == RefuseCode::None && ctlMkdir(c, remote);
+}
+
+// ControlSession: one authenticated connection reused for many operations
+// (e.g. a recursive copy), avoiding a handshake + logon per file.
+bool RfbClient::openControl(ControlSession& s) {
+  return dialAndAuth(s.conn_, SessionMode::Control) == RefuseCode::None;
+}
+bool ControlSession::list(const std::wstring& path, std::string& out) { return ctlFileList(conn_, path, out); }
+bool ControlSession::download(const std::wstring& r, const std::wstring& l) { return ctlFileGet(conn_, r, l); }
+bool ControlSession::upload(const std::wstring& l, const std::wstring& r) { return ctlFilePut(conn_, l, r); }
+bool ControlSession::mkdir(const std::wstring& r) { return ctlMkdir(conn_, r); }
 
 bool RfbClient::rfbHandshake() {
   char ver[rfb::kVersionLen];

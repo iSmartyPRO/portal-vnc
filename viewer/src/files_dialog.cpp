@@ -76,14 +76,17 @@ std::vector<Entry> listLocal(const std::wstring& path) {
   FindClose(h);
   return out;
 }
-std::vector<Entry> listRemote(RfbClient* c, const std::wstring& path) {
-  std::vector<Entry> out; std::string js;
-  if (!c->fileList(path, js)) return out;
+std::vector<Entry> parseEntries(const std::string& js) {
+  std::vector<Entry> out;
   json j; try { j = json::parse(js); } catch (...) { return out; }
   if (j.contains("entries"))
     for (const auto& e : j["entries"])
       out.push_back({toW(e.value("name", "")), e.value("dir", false), e.value("size", 0.0)});
   return out;
+}
+std::vector<Entry> listRemote(RfbClient* c, const std::wstring& path) {
+  std::string js;
+  return c->fileList(path, js) ? parseEntries(js) : std::vector<Entry>{};
 }
 
 void fillPane(Pane& p, RfbClient* c) {
@@ -101,25 +104,27 @@ void fillPane(Pane& p, RfbClient* c) {
   }
 }
 
-// Recursively copies one item (file or folder). src pane is remote? -> dst is local, and vice versa.
-bool copyItem(State* st, bool srcRemote, const std::wstring& srcFull, bool isDir, const std::wstring& dstFull,
-              int depth = 0) {
+// Recursively copies one item (file or folder) using one shared control
+// session. src pane is remote? -> dst is local, and vice versa.
+bool copyItem(ControlSession& sess, bool srcRemote, const std::wstring& srcFull, bool isDir,
+              const std::wstring& dstFull, int depth = 0) {
   if (depth > 64) return false;  // guard against junction/symlink loops
   if (!isDir) {
-    return srcRemote ? st->client->fileDownload(srcFull, dstFull)
-                     : st->client->fileUpload(srcFull, dstFull);
+    return srcRemote ? sess.download(srcFull, dstFull) : sess.upload(srcFull, dstFull);
   }
   // Create destination directory.
   if (srcRemote) {  // dest is local
     int rc = SHCreateDirectoryExW(nullptr, dstFull.c_str(), nullptr);
     if (rc != ERROR_SUCCESS && rc != ERROR_ALREADY_EXISTS && rc != ERROR_FILE_EXISTS) return false;
-  } else if (!st->client->fileMkdir(dstFull)) {  // dest is remote
+  } else if (!sess.mkdir(dstFull)) {  // dest is remote
     return false;
   }
-  auto kids = srcRemote ? listRemote(st->client, srcFull) : listLocal(srcFull);
+  std::vector<Entry> kids;
+  if (srcRemote) { std::string js; if (sess.list(srcFull, js)) kids = parseEntries(js); }
+  else kids = listLocal(srcFull);
   bool ok = true;
   for (const auto& k : kids)
-    if (!copyItem(st, srcRemote, joinPath(srcFull, k.name), k.dir, joinPath(dstFull, k.name), depth + 1)) ok = false;
+    if (!copyItem(sess, srcRemote, joinPath(srcFull, k.name), k.dir, joinPath(dstFull, k.name), depth + 1)) ok = false;
   return ok;
 }
 
@@ -139,10 +144,17 @@ void doCopy(HWND h, State* st, bool srcRemote) {
 
   SetWindowTextW(st->status, L"Copying...");
   SetCursor(LoadCursor(nullptr, IDC_WAIT));
+  // One control connection for the whole batch (avoids a handshake + logon per file).
+  ControlSession sess;
+  if (!st->client->openControl(sess)) {
+    SetCursor(LoadCursor(nullptr, IDC_ARROW));
+    SetWindowTextW(st->status, L"Could not open a control connection.");
+    return;
+  }
   int okN = 0, failN = 0;
   for (int idx : sel) {
     const Entry& e = src.entries[idx];
-    bool ok = copyItem(st, srcRemote, joinPath(src.path, e.name), e.dir, joinPath(dst.path, e.name));
+    bool ok = copyItem(sess, srcRemote, joinPath(src.path, e.name), e.dir, joinPath(dst.path, e.name));
     ok ? ++okN : ++failN;
   }
   SetCursor(LoadCursor(nullptr, IDC_ARROW));

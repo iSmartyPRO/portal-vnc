@@ -13,6 +13,23 @@
 
 namespace pvnc {
 
+class RfbClient;
+
+// One authenticated control connection reused for a batch of control
+// operations (e.g. a recursive file copy), avoiding a TLS handshake + Windows
+// logon per file. Obtain one via RfbClient::openControl().
+class ControlSession {
+ public:
+  bool list(const std::wstring& path, std::string& jsonOut);
+  bool download(const std::wstring& remotePath, const std::wstring& localPath);
+  bool upload(const std::wstring& localPath, const std::wstring& remotePath);
+  bool mkdir(const std::wstring& remotePath);
+
+ private:
+  friend class RfbClient;
+  TlsConn conn_;
+};
+
 // Connects to a PortalVNC agent over mTLS, authenticates, then runs the RFB
 // client protocol on a background thread: it decodes framebuffer updates into a
 // shared BGRA buffer and sends queued input events. All TLS I/O stays on that
@@ -58,6 +75,10 @@ class RfbClient {
   bool fileDownload(const std::wstring& remotePath, const std::wstring& localPath);
   bool fileUpload(const std::wstring& localPath, const std::wstring& remotePath);
   bool fileMkdir(const std::wstring& remotePath);
+
+  // Opens a reusable control session (one connection for many operations).
+  // Returns false if the connection/auth fails.
+  bool openControl(ControlSession& out);
 
   // Request a full (non-incremental) framebuffer update on the next loop.
   void requestRefresh() { fullRefresh_.store(true); }
