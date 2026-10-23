@@ -1,0 +1,69 @@
+name: release
+
+# Build the agent, viewer and MSI on every version tag and publish a GitHub
+# release with the artifacts attached. Tag a release with:
+#   git tag v0.1.1 && git push origin v0.1.1
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure (CMake + vcpkg, static)
+        shell: pwsh
+        run: |
+          cmake -S . -B build -G "Visual Studio 17 2022" -A x64 `
+            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" `
+            -DVCPKG_TARGET_TRIPLET=x64-windows-static `
+            -DVCPKG_HOST_TRIPLET=x64-windows-static `
+            -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
+
+      - name: Build (Release)
+        shell: pwsh
+        run: cmake --build build --config Release
+
+      - name: Install WiX
+        shell: pwsh
+        run: |
+          dotnet tool install --global wix --version 5.0.2
+          echo "$env:USERPROFILE\.dotnet\tools" | Out-File -FilePath $env:GITHUB_PATH -Append
+          & "$env:USERPROFILE\.dotnet\tools\wix.exe" extension add -g WixToolset.Firewall.wixext/5.0.2
+
+      - name: Build MSI
+        shell: pwsh
+        run: |
+          $ver = "${{ github.ref_name }}".TrimStart('v')
+          & "$env:USERPROFILE\.dotnet\tools\wix.exe" build installer/PortalVNC.wxs `
+            -ext WixToolset.Firewall.wixext `
+            -d "AgentExe=$PWD/build/agent/Release/pvnc-agent.exe" `
+            -d "ConfigSrc=$PWD/installer/config.install.json" `
+            -d "Port=7654" `
+            -o "PortalVNC-$ver.msi"
+
+      - name: Package portable zip
+        shell: pwsh
+        run: |
+          $ver = "${{ github.ref_name }}".TrimStart('v')
+          New-Item -ItemType Directory -Force -Path staging | Out-Null
+          Copy-Item build/agent/Release/pvnc-agent.exe staging/
+          Copy-Item build/viewer/Release/pvnc-viewer.exe staging/
+          Copy-Item agent/config.example.json staging/
+          Compress-Archive -Path staging/* -DestinationPath "PortalVNC-$ver-win64.zip" -Force
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: PortalVNC ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            PortalVNC-*.msi
+            PortalVNC-*-win64.zip
