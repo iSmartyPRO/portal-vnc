@@ -10,6 +10,7 @@
 #include <string>
 
 #include "config.h"
+#include "paths.h"
 
 #pragma comment(lib, "wtsapi32.lib")
 #pragma comment(lib, "userenv.lib")
@@ -24,12 +25,6 @@ SERVICE_STATUS g_status{};
 HANDLE g_stopEvent = nullptr;
 HANDLE g_sessionEvent = nullptr;
 
-std::wstring exePath() {
-  wchar_t buf[MAX_PATH];
-  GetModuleFileNameW(nullptr, buf, MAX_PATH);
-  return buf;
-}
-
 void reportStatus(DWORD state, DWORD waitHint = 0) {
   g_status.dwCurrentState = state;
   g_status.dwWaitHint = waitHint;
@@ -43,22 +38,10 @@ void reportStatus(DWORD state, DWORD waitHint = 0) {
   SetServiceStatus(g_statusHandle, &g_status);
 }
 
-std::string exeDirA() {
-  wchar_t buf[MAX_PATH];
-  GetModuleFileNameW(nullptr, buf, MAX_PATH);
-  std::wstring w(buf);
-  auto s = w.find_last_of(L"\\/");
-  std::wstring dir = (s == std::wstring::npos) ? L"." : w.substr(0, s);
-  int n = WideCharToMultiByte(CP_UTF8, 0, dir.data(), (int)dir.size(), nullptr, 0, nullptr, nullptr);
-  std::string out(n, '\0');
-  WideCharToMultiByte(CP_UTF8, 0, dir.data(), (int)dir.size(), out.data(), n, nullptr, nullptr);
-  return out;
-}
-
 // Base listening port from config.json next to the exe (default 7654).
 uint16_t basePort() {
   try {
-    AgentConfig c = loadConfig(exeDirA() + "\\config.json");
+    AgentConfig c = loadConfig(exeDirUtf8() + "\\config.json");
     return c.port;
   } catch (...) { return 7654; }
 }
@@ -86,7 +69,7 @@ HANDLE launchWorker(DWORD sessionId, uint16_t port) {
   LPVOID env = nullptr;
   CreateEnvironmentBlock(&env, dup, FALSE);
 
-  std::wstring cmd = L"\"" + exePath() + L"\" --worker --port " + std::to_wstring(port);
+  std::wstring cmd = L"\"" + exePathW() + L"\" --worker --port " + std::to_wstring(port);
   std::wstring desktop = L"winsta0\\default";
 
   STARTUPINFOW si{};
@@ -209,7 +192,7 @@ int installService() {
   SC_HANDLE scm = OpenSCManagerW(nullptr, nullptr, SC_MANAGER_CREATE_SERVICE);
   if (!scm) { std::fprintf(stderr, "OpenSCManager failed (%lu). Run as admin.\n", GetLastError()); return 1; }
 
-  std::wstring bin = L"\"" + exePath() + L"\" --service";
+  std::wstring bin = L"\"" + exePathW() + L"\" --service";
   SC_HANDLE svc = CreateServiceW(
       scm, kServiceName, kServiceDisplay, SERVICE_ALL_ACCESS, SERVICE_WIN32_OWN_PROCESS,
       SERVICE_AUTO_START, SERVICE_ERROR_NORMAL, bin.c_str(), nullptr, nullptr, nullptr,

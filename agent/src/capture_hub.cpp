@@ -68,10 +68,10 @@ void CaptureHub::loop() {
       }
     }
 
-    Frame f;
-    if (cap_ && cap_->grab(f)) {
+    auto f = std::make_shared<Frame>();
+    if (cap_ && cap_->grab(*f)) {
       std::lock_guard<std::mutex> lk(mu_);
-      current_ = std::move(f);
+      current_ = std::move(f);  // publish an immutable snapshot; readers share it
       ++version_;
       cv_.notify_all();
     }
@@ -80,20 +80,19 @@ void CaptureHub::loop() {
   if (desk_) { CloseDesktop(desk_); desk_ = nullptr; }
 }
 
-uint64_t CaptureHub::latest(Frame& out) {
+std::shared_ptr<const Frame> CaptureHub::latest() {
   std::unique_lock<std::mutex> lk(mu_);
   cv_.wait_for(lk, std::chrono::seconds(2), [this] { return version_ > 0; });
-  out = current_;
-  return version_;
+  return current_;  // atomic refcount bump only; no pixel copy under the lock
 }
 
 int CaptureHub::width() {
   std::lock_guard<std::mutex> lk(mu_);
-  return current_.width;
+  return current_ ? current_->width : 0;
 }
 int CaptureHub::height() {
   std::lock_guard<std::mutex> lk(mu_);
-  return current_.height;
+  return current_ ? current_->height : 0;
 }
 
 void CaptureHub::enqueuePointer(uint8_t buttons, int x, int y) {

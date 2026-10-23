@@ -110,12 +110,11 @@ void RfbServer::serveClient(TlsConn& conn) {
   if (!conn.readFull(&sharedFlag, 1)) return;
 
   // --- ServerInit ---
-  Frame frame;
-  hub_.latest(frame);
-  if (frame.width == 0) return;
+  auto frame = hub_.latest();
+  if (!frame || frame->width == 0) return;
   std::vector<uint8_t> init;
-  putU16(init, uint16_t(frame.width));
-  putU16(init, uint16_t(frame.height));
+  putU16(init, uint16_t(frame->width));
+  putU16(init, uint16_t(frame->height));
   rfb::PixelFormat pf = rfb::defaultPixelFormat();
   init.insert(init.end(), reinterpret_cast<uint8_t*>(&pf), reinterpret_cast<uint8_t*>(&pf) + sizeof(pf));
   const char* name = "PortalVNC";
@@ -123,7 +122,7 @@ void RfbServer::serveClient(TlsConn& conn) {
   init.insert(init.end(), name, name + std::strlen(name));
   if (!conn.writeFull(init.data(), init.size())) return;
 
-  Frame lastSent;  // empty => next update is full
+  std::shared_ptr<const Frame> lastSent;  // null => next update is full
 
   conn.setRecvTimeout(20);
   bool pending = false;
@@ -185,18 +184,19 @@ void RfbServer::serveClient(TlsConn& conn) {
 
     // Send an update if one was requested and there is something to show.
     if (pending) {
-      Frame cur;
-      hub_.latest(cur);
+      auto cur = hub_.latest();
+      if (!cur) continue;
       DirtyRect r;
-      if (pendingFull || lastSent.width != cur.width || lastSent.height != cur.height) {
-        r.x = 0; r.y = 0; r.w = cur.width; r.h = cur.height; r.empty = (cur.width == 0);
+      if (pendingFull || !lastSent || lastSent->width != cur->width ||
+          lastSent->height != cur->height) {
+        r.x = 0; r.y = 0; r.w = cur->width; r.h = cur->height; r.empty = (cur->width == 0);
       } else {
-        r = computeDirtyRect(lastSent, cur);
+        r = computeDirtyRect(*lastSent, *cur);
       }
       if (!r.empty) {
-        auto msg = rawUpdate(cur, r);
+        auto msg = rawUpdate(*cur, r);
         if (!conn.writeFull(msg.data(), msg.size())) break;
-        lastSent = std::move(cur);
+        lastSent = cur;  // share the immutable snapshot as the next diff baseline
         pending = false;
         pendingFull = false;
       }
@@ -251,6 +251,10 @@ int RfbServer::run() {
         closesocket(raw);
         return;  // bad/missing client cert: TLS rejected
       }
+      // Bound every read from here on: a client that passes TLS but then stalls
+      // (during our handshake or RFB) is dropped by the read deadline instead of
+      // tying up this thread forever.
+      conn.setRecvTimeout(20);
       auto hs = serverHandshake(conn);
       if (!hs.ok) {
         sendAuthResult(conn, hs.refuse);

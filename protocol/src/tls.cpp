@@ -214,21 +214,34 @@ TlsConn& TlsConn::operator=(TlsConn&& o) noexcept {
 }
 TlsConn::~TlsConn() { close(); }
 
+// Max time to wait for any progress on one read/write before giving up, so a
+// peer that stalls mid-message (e.g. after a recv timeout is set) cannot hang
+// the serving thread indefinitely.
+static constexpr unsigned long long kIoDeadlineMs = 30000;
+
 long TlsConn::read(void* buf, size_t len) {
   if (!ssl_) return -1;
+  const unsigned long long start = GetTickCount64();
   for (;;) {
     int n = mbedtls_ssl_read(ssl_.get(), static_cast<unsigned char*>(buf), len);
     if (n == MBEDTLS_ERR_SSL_PEER_CLOSE_NOTIFY) return 0;
-    if (n == MBEDTLS_ERR_SSL_WANT_READ || n == MBEDTLS_ERR_SSL_WANT_WRITE) continue;
+    if (n == MBEDTLS_ERR_SSL_WANT_READ || n == MBEDTLS_ERR_SSL_WANT_WRITE) {
+      if (GetTickCount64() - start > kIoDeadlineMs) return -1;  // stalled peer
+      continue;
+    }
     if (n < 0) return -1;
     return n;
   }
 }
 long TlsConn::write(const void* buf, size_t len) {
   if (!ssl_) return -1;
+  const unsigned long long start = GetTickCount64();
   for (;;) {
     int n = mbedtls_ssl_write(ssl_.get(), static_cast<const unsigned char*>(buf), len);
-    if (n == MBEDTLS_ERR_SSL_WANT_READ || n == MBEDTLS_ERR_SSL_WANT_WRITE) continue;
+    if (n == MBEDTLS_ERR_SSL_WANT_READ || n == MBEDTLS_ERR_SSL_WANT_WRITE) {
+      if (GetTickCount64() - start > kIoDeadlineMs) return -1;
+      continue;
+    }
     if (n < 0) return -1;
     return n;
   }

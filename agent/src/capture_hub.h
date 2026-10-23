@@ -40,9 +40,9 @@ class CaptureHub {
   void start();
   void stop();
 
-  // Copies the latest frame into `out`; returns its version. Blocks briefly
-  // until the first frame is available.
-  uint64_t latest(Frame& out);
+  // Returns an immutable snapshot of the latest frame (shared, no copy). Blocks
+  // briefly until the first frame is available; may return nullptr if none.
+  std::shared_ptr<const Frame> latest();
 
   int width();
   int height();
@@ -59,7 +59,7 @@ class CaptureHub {
 
   std::mutex mu_;
   std::condition_variable cv_;
-  Frame current_;
+  std::shared_ptr<const Frame> current_;
   uint64_t version_ = 0;
 
   std::mutex inMu_;

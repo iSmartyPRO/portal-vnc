@@ -3,6 +3,7 @@ find_package(nlohmann_json CONFIG REQUIRED)
 # Core agent logic as a static lib so tests can link it.
 add_library(pvnc_agent_core STATIC
   src/config.cpp
+  src/paths.cpp
   src/capture_gdi.cpp
   src/capture_hub.cpp
   src/input.cpp

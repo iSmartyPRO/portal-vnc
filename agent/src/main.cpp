@@ -16,23 +16,12 @@
 #include <string>
 
 #include "config.h"
+#include "paths.h"
 #include "rfb_server.h"
 #include "service.h"
 #include "tray.h"
 
 using namespace pvnc;
-
-static std::string exeDir() {
-  wchar_t buf[MAX_PATH];
-  DWORD n = GetModuleFileNameW(nullptr, buf, MAX_PATH);
-  std::wstring w(buf, n);
-  auto slash = w.find_last_of(L"\\/");
-  std::wstring dir = (slash == std::wstring::npos) ? L"." : w.substr(0, slash);
-  int len = WideCharToMultiByte(CP_UTF8, 0, dir.data(), (int)dir.size(), nullptr, 0, nullptr, nullptr);
-  std::string s(len, '\0');
-  WideCharToMultiByte(CP_UTF8, 0, dir.data(), (int)dir.size(), s.data(), len, nullptr, nullptr);
-  return s;
-}
 
 static int runAgent(const std::string& configPath, uint16_t portOverride) {
   AgentConfig cfg;
@@ -78,7 +67,7 @@ int main(int argc, char** argv) {
     else if (a == "--config" && i + 1 < argc) configPath = argv[++i];
     else if (a == "--port" && i + 1 < argc) portOverride = (uint16_t)std::atoi(argv[++i]);
   }
-  if (configPath.empty()) configPath = exeDir() + "\\config.json";
+  if (configPath.empty()) configPath = exeDirUtf8() + "\\config.json";
 
   if (mode == "install") return installService();
   if (mode == "uninstall") return uninstallService();
