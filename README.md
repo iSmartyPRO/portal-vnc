@@ -47,6 +47,7 @@ or standalone. PortalVNC is designed around those realities:
 | 🌐 **Browser access** | Gateway + noVNC for embedding in a web portal — credentials never reach the browser |
 | 🧩 **Three clients** | Native viewer executable, browser (noVNC), and a reusable library for your portal |
 | 📦 **MSI installer** | Registers the service and a firewall rule; deployable via Group Policy |
+| 🛠️ **Agent Manager GUI** | Central CA (encrypted key), issue/sign certs, and configure each agent — status, access (object picker → SID), service control |
 
 ## How it works
 
@@ -121,6 +122,13 @@ Start-Service PortalVNC
 Copy `client.crt` / `client.key` / `devca.crt` to the operator side (native viewer or portal
 gateway). For production, replace the generated certificates with ones from your own CA.
 
+**Agent Manager (GUI):** [`pvnc-admin.exe`](admin/README.md) is a standalone GUI for the
+production flow — run a central CA on the admin PC (create/open a password-protected CA, issue
+agent/client bundles, sign CSRs), then, on each machine, view the agent's status/version/live
+sessions, import a certificate bundle, edit the allow-list and access (users/groups via the
+Windows object picker, stored as SIDs) and port/listen/tray, and install/start the service.
+The CA private key is encrypted at rest (AES-256-GCM + PBKDF2) and never leaves the admin PC.
+
 ## Project layout
 
 | Directory | Purpose |
@@ -128,6 +136,7 @@ gateway). For production, replace the generated certificates with ones from your
 | [`protocol/`](protocol) | Shared module: mutual TLS (mbedTLS), handshake, versioning, logon + SID |
 | [`agent/`](agent) | Agent: service, capture, input, RFB over mTLS, tray, multi-session |
 | [`viewer/`](viewer) | Native viewer (Win32 window) |
+| [`admin/`](admin) | Agent Manager GUI: central CA + agent configuration ([`pvnc-admin.exe`](admin/README.md)) |
 | [`gateway/`](gateway) | Browser↔agent bridge (Node) + noVNC, for the portal |
 | [`installer/`](installer) | WiX MSI: service + firewall rule |
 | [`tools/`](tools) | Scripts: certificates, local run, service install |

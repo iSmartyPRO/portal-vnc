@@ -60,6 +60,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path staging | Out-Null
           Copy-Item build/agent/Release/pvnc-agent.exe staging/
           Copy-Item build/viewer/Release/pvnc-viewer.exe staging/
+          Copy-Item build/admin/Release/pvnc-admin.exe staging/
           Copy-Item agent/config.example.json staging/
           Compress-Archive -Path staging/* -DestinationPath "PortalVNC-$ver-win64.zip" -Force
 
