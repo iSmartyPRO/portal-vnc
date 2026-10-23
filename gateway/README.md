@@ -1,66 +1,65 @@
-# PortalVNC gateway (браузер ↔ агент)
+# PortalVNC gateway (browser ↔ agent)
 
-Мост между браузером (noVNC) и агентом PortalVNC. Терминирует WebSocket от
-браузера, устанавливает mTLS-соединение к агенту, проводит наше рукопожатие с
-учётными данными Windows и дальше **прозрачно гоняет RFB** в обе стороны. В
-браузере работает стандартный noVNC — агент отдаёт обычный RFB, поэтому ничего
-специального на стороне браузера не нужно.
+A bridge between the browser (noVNC) and a PortalVNC agent. It terminates the
+browser's WebSocket, opens a mutual-TLS connection to the agent, performs our
+handshake with the Windows credentials, and then **relays raw RFB** in both
+directions. Standard noVNC runs in the browser — the agent speaks ordinary RFB,
+so nothing special is needed on the browser side.
 
 ```
-Браузер (noVNC, RFB-over-WS) ──ws──► Шлюз ──mTLS + рукопожатие PortalVNC──► Агент
+Browser (noVNC, RFB-over-WS) ──ws──► Gateway ──mTLS + PortalVNC handshake──► Agent
 ```
 
-## Файлы
+## Files
 
-| Файл | Назначение |
+| File | Purpose |
 |---|---|
-| `pvnc.js` | Клиент PortalVNC: mTLS к агенту + рукопожатие (версия, учётные данные, авторизация). `connectAgent(opts)` → tls-сокет, готовый к RFB. Переиспользуется порталом. |
-| `server.js` | Standalone WS-сервер: по токену находит цель и учётные данные, вызывает `connectAgent`, затем релеит RFB. Для разработки и тестов. |
-| `public/index.html` | Тестовая страница noVNC. |
-| `config.example.json` | Пример: токен → цель + учётные данные. Реальные пароли НЕ коммитить. |
+| `pvnc.js` | PortalVNC client: mTLS to the agent + handshake (version, credentials, authorization). `connectAgent(opts)` → a TLS socket ready for RFB. Reusable by the portal. |
+| `server.js` | Standalone WebSocket server: maps a token to a target + credentials, calls `connectAgent`, then relays RFB (with backpressure). For development and testing. |
+| `public/index.html` | noVNC test page. |
+| `config.example.json` | Example: token → target + credentials. Never commit real passwords. |
 
-## Локальный запуск и тест
+## Local run and test
 
 ```bash
-# 1) агент на 127.0.0.1:7654 (dev)
+# 1) agent on 127.0.0.1:7654 (dev)
 build/agent/Release/pvnc-agent.exe --worker --config certs/agent-config.json
-# 2) шлюз (конфиг с токеном -> цель + учётка)
+# 2) gateway (config maps a token -> target + credentials)
 PVNC_GW_CONFIG=certs/gw-config.json node gateway/server.js
-# 3) открыть http://localhost:8787/ , токен "dev", «Подключиться»
+# 3) open http://localhost:8787/ , token "dev", click Connect
 ```
 
-Проверено: реальный рабочий стол Windows рендерится в браузере через этот путь
-(вход `iNB`, dev-сертификаты).
+Verified: a real Windows desktop renders in the browser through this path.
 
-## Интеграция в веб-портал (docker-app-skeleton, модуль `remote`)
+## Integrating with the web portal (docker-app-skeleton, `remote` module)
 
-Портал уже выполняет роль «держателя токенов и хранилища паролей» для guacd.
-PortalVNC подключается **мимо guacd**, своей обвязкой. Минимальные изменения:
+The portal already plays the role of "token minter and credential vault" for guacd.
+PortalVNC connects **bypassing guacd**, with its own bridge. Minimal changes:
 
-1. **Бэкенд.** Добавить WS-маршрут (напр. `/api/app/remote/pvnc`) рядом с
-   существующим туннелем guacd. В обработчике:
-   - проверить сессию/право пользователя (как в текущем модуле `remote`);
-   - взять `{host, port, username, domain, password}` из менеджера паролей
-     портала (`resolveCredentials`, как для RDP) + пути к CA/клиентскому
-     сертификату PortalVNC из настроек модуля;
-   - вызвать `connectAgent(...)` из `gateway/pvnc.js` и срелеить байты между
-     WebSocket браузера и полученным сокетом (см. `server.js`).
-   Учётные данные в браузер не попадают — всё в бэкенде, как сейчас у guacd.
-2. **Nginx.** Для нового маршрута — те же upgrade-заголовки и длинный таймаут,
-   что у `/api/app/remote/tunnel`.
-3. **Фронтенд.** В `RemoteViewer.jsx` для хостов типа `portalvnc` открывать
-   noVNC `RFB` на новый WS-маршрут вместо guacamole-common-js. Остальной
-   интерфейс (каталог, журнал, менеджер паролей) не меняется.
-4. **Каталог.** Тип хоста `portalvnc` (поле `protocol`), маршрутизация на
-   PortalVNC-шлюз выбирается по типу — для пользователя незаметно.
+1. **Backend.** Add a WS route (e.g. `/api/app/remote/pvnc`) next to the existing guacd
+   tunnel. In the handler:
+   - verify the user's session and permission (as the current `remote` module does);
+   - take `{host, port, username, domain, password}` from the portal's credential vault
+     (`resolveCredentials`, as for RDP) plus the PortalVNC CA/client-certificate paths
+     from the module settings;
+   - call `connectAgent(...)` from `gateway/pvnc.js` and relay bytes between the browser's
+     WebSocket and the returned socket (see `server.js`).
+   Credentials never reach the browser — everything stays in the backend, as with guacd.
+2. **Nginx.** Give the new route the same upgrade headers and long timeout as
+   `/api/app/remote/tunnel`.
+3. **Frontend.** In `RemoteViewer.jsx`, for hosts of type `portalvnc`, open a noVNC `RFB`
+   on the new WS route instead of guacamole-common-js. The rest of the UI (catalog, log,
+   credential vault) stays the same.
+4. **Catalog.** Add a `portalvnc` host type (`protocol` field); routing to the PortalVNC
+   gateway is chosen by type, transparently to the user.
 
-Развёртывание в работающий портал (сборка фронтенда, перезапуск контейнера,
-nginx) — отдельный шаг на стороне портала; здесь поставляется переиспользуемый
-`pvnc.js` и эталонный `server.js`.
+Deploying into a running portal (frontend build, container restart, nginx) is a separate
+step on the portal side; this repository ships the reusable `pvnc.js` and the reference
+`server.js`.
 
-## Безопасность
+## Security
 
-- Пароль и адрес никогда не уходят в браузер — только токен.
-- Шлюз держит клиентский сертификат нашего CA: именно он делает портал
-  доверенным клиентом для агента. Чужой WS-клиент без валидного токена
-  отклоняется; агент без нашего сертификата не примет никого.
+- The password and address never reach the browser — only a token does.
+- The gateway holds a client certificate from your CA: that is what makes the portal a
+  trusted client to the agent. A WS client without a valid token is rejected; an agent
+  will not accept anyone without your certificate.

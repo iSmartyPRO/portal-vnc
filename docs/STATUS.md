@@ -1,39 +1,42 @@
-# PortalVNC — статус реализации
+# PortalVNC — implementation status
 
-Дата: 2026-10-22. Все пять запланированных планов реализованы и закоммичены.
+All five planned milestones are implemented and committed.
 
-## Что сделано и как проверено
+## What is done and how it was verified
 
-| План | Компонент | Проверка |
+| Plan | Component | Verification |
 |---|---|---|
-| 1 | Протокол (mTLS, рукопожатие, версии, вход+SID) | ✅ 40 автотестов + живые reject-пути |
-| 1 | Агент: конфиг, IP-фильтр, захват, RFB, ввод | ✅ 72 автотеста (вкл. интеграционный RFB-over-mTLS) |
-| 1 | Просмотрщик (окно Win32) | ✅ живой вход реальным паролем, стрим |
-| 2 | Служба Windows + значок в трее | ✅ сборка + worker-режим; служба — через MSI/elevated |
-| 2 | Экран блокировки/UAC (следование за input-desktop) | ✅ код; полная проверка — на реальной блокировке |
-| 3 | Мультисессии / терминальный сервер | ✅ `--port`, супервизор на сессию; RDP — на реальном TS |
-| 4 | Шлюз браузер↔агент + noVNC | ✅ **живая проверка: рабочий стол в браузере** |
-| 5 | MSI-установщик (служба + брандмауэр) | ✅ собирается и валидируется; установка — elevated/GPO |
+| 1 | Protocol (mTLS, handshake, versioning, logon + SID) | ✅ 40 automated tests + live reject paths |
+| 1 | Agent: config, IP filter, capture, RFB, input | ✅ 72 automated tests (incl. an RFB-over-mTLS integration test) |
+| 1 | Viewer (Win32 window) | ✅ live logon with a real password, streaming |
+| 2 | Windows service + tray icon | ✅ build + worker mode; full service via MSI / elevated run |
+| 2 | Lock screen / UAC (input-desktop following) | ✅ code; full check on a real locked session |
+| 3 | Multi-session / terminal server | ✅ `--port`, per-session supervisor; RDP on a real TS |
+| 4 | Browser↔agent gateway + noVNC | ✅ **live: desktop rendered in the browser** |
+| 5 | MSI installer (service + firewall) | ✅ builds and validates; install needs elevation / GPO |
 
-## Проверено живьём на этой машине (вход iNB)
+## Verified live on a dev machine
 
-- Просмотрщик-exe подключается по mTLS, проходит вход, видит и управляет рабочим столом.
-- Неверный пароль → отказ; чужой сертификат → отказ; адрес не из allowlist → отказ.
-- Worker-режим (служебный) стримит со слежением за рабочим столом.
+- The native viewer connects over mTLS, authenticates, and views/controls the desktop.
+- Wrong password → rejected; rogue certificate → rejected; off-allowlist address → rejected.
+- Worker (service) mode streams with input-desktop following.
 - `--port` override.
-- **Браузер (noVNC) → шлюз → агент: реальный рабочий стол Windows в браузере** (скриншот `docs/browser-viewer-working.jpg`).
+- **Browser (noVNC) → gateway → agent: a real Windows desktop in the browser.**
 
-## Требует проверки в реальной среде (не воспроизводится локально/headless)
+## Needs validation in a real environment (not reproducible headless / locally)
 
-- Полный цикл службы (install→start→stop) и захват **экрана блокировки/UAC** — нужен запуск от администратора и реальная блокировка.
-- Несколько **RDP-сессий** на терминальном сервере.
-- Установка **MSI** через GPO в домене.
-- Развёртывание шлюза и noVNC-просмотрщика **в работающий веб-портал** (сборка фронтенда, nginx, перезапуск контейнера) — код и инструкция в `gateway/README.md`.
-- Провижининг **боевых сертификатов** (единый сертификат агента на парк) и конфига через GPO.
+- The full service lifecycle (install→start→stop) and **lock-screen / UAC** capture —
+  requires an elevated run and a real locked session.
+- Multiple **RDP sessions** on a terminal server.
+- **MSI** deployment via Group Policy in a domain.
+- Deploying the gateway and the noVNC viewer **into a running web portal** (frontend
+  build, nginx, container restart) — code and instructions are in `gateway/README.md`.
+- Provisioning **production certificates** (a fleet-wide agent certificate) and config via GPO.
 
-## Следующие шаги для продакшена
+## Next steps for production
 
-1. Выпустить боевой CA + сертификат агента + клиентский сертификат портала; разложить через GPO.
-2. Установить MSI на тестовую OU, проверить блокировку/UAC и журнал.
-3. Вкрутить шлюз в модуль `remote` портала (см. `gateway/README.md`), добавить тип хоста `portalvnc`.
-4. Проверить на терминальном сервере мультисессии.
+1. Issue a production CA + agent certificate + portal client certificate; distribute via GPO.
+2. Install the MSI on a test OU; verify lock-screen / UAC and the log.
+3. Wire the gateway into the portal's `remote` module (see `gateway/README.md`), add the
+   `portalvnc` host type.
+4. Validate multi-session behavior on a terminal server.

@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 300" font-family="Segoe UI, system-ui, sans-serif">
+  <rect width="920" height="300" rx="16" fill="#0d1117"/>
+  <text x="460" y="40" text-anchor="middle" fill="#e6edf3" font-size="20" font-weight="700">How a connection is established</text>
+
+  <!-- pipeline steps -->
+  <g>
+    <rect x="30"  y="90" width="150" height="86" rx="10" fill="#161b22" stroke="#1f6feb"/>
+    <text x="105" y="120" text-anchor="middle" fill="#e6edf3" font-size="14" font-weight="600">1 · mTLS</text>
+    <text x="105" y="142" text-anchor="middle" fill="#8b949e" font-size="11">mutual cert check</text>
+    <text x="105" y="159" text-anchor="middle" fill="#8b949e" font-size="11">(our CA only)</text>
+  </g>
+  <g>
+    <rect x="215" y="90" width="150" height="86" rx="10" fill="#161b22" stroke="#30363d"/>
+    <text x="290" y="120" text-anchor="middle" fill="#e6edf3" font-size="14" font-weight="600">2 · Version</text>
+    <text x="290" y="142" text-anchor="middle" fill="#8b949e" font-size="11">protocol handshake</text>
+    <text x="290" y="159" text-anchor="middle" fill="#8b949e" font-size="11">&amp; capabilities</text>
+  </g>
+  <g>
+    <rect x="400" y="90" width="150" height="86" rx="10" fill="#161b22" stroke="#30363d"/>
+    <text x="475" y="120" text-anchor="middle" fill="#e6edf3" font-size="14" font-weight="600">3 · Logon</text>
+    <text x="475" y="142" text-anchor="middle" fill="#8b949e" font-size="11">Windows account</text>
+    <text x="475" y="159" text-anchor="middle" fill="#8b949e" font-size="11">(LogonUser)</text>
+  </g>
+  <g>
+    <rect x="585" y="90" width="150" height="86" rx="10" fill="#161b22" stroke="#238636"/>
+    <text x="660" y="120" text-anchor="middle" fill="#e6edf3" font-size="14" font-weight="600">4 · Authorize</text>
+    <text x="660" y="142" text-anchor="middle" fill="#8b949e" font-size="11">Administrators</text>
+    <text x="660" y="159" text-anchor="middle" fill="#8b949e" font-size="11">SID S-1-5-32-544</text>
+  </g>
+  <g>
+    <rect x="770" y="90" width="120" height="86" rx="10" fill="#161b22" stroke="#30363d"/>
+    <text x="830" y="120" text-anchor="middle" fill="#e6edf3" font-size="14" font-weight="600">5 · RFB</text>
+    <text x="830" y="142" text-anchor="middle" fill="#8b949e" font-size="11">screen +</text>
+    <text x="830" y="159" text-anchor="middle" fill="#8b949e" font-size="11">input</text>
+  </g>
+
+  <defs>
+    <marker id="h" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#6e7681"/></marker>
+  </defs>
+  <line x1="182" y1="133" x2="211" y2="133" stroke="#6e7681" stroke-width="2" marker-end="url(#h)"/>
+  <line x1="367" y1="133" x2="396" y2="133" stroke="#6e7681" stroke-width="2" marker-end="url(#h)"/>
+  <line x1="552" y1="133" x2="581" y2="133" stroke="#6e7681" stroke-width="2" marker-end="url(#h)"/>
+  <line x1="737" y1="133" x2="766" y2="133" stroke="#6e7681" stroke-width="2" marker-end="url(#h)"/>
+
+  <text x="460" y="235" text-anchor="middle" fill="#8b949e" font-size="12">Everything runs inside the TLS tunnel. The password is verified by Windows and never stored.</text>
+  <text x="460" y="258" text-anchor="middle" fill="#8b949e" font-size="12">A wrong password, a non-admin account, or an untrusted certificate is rejected with a clear reason.</text>
+</svg>

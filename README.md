@@ -2,138 +2,136 @@
 
 # PortalVNC
 
-**Защищённый интерактивный удалённый доступ к Windows — аналог VNC с улучшенными возможностями для администрирования парка машин в доменной и бездоменной среде.**
+### Secure, interactive remote access to Windows — a VNC alternative built for administering fleets of machines, in a domain or workgroup.
 
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
 ![Platform](https://img.shields.io/badge/platform-Windows%20x64-0078D6?logo=windows&logoColor=white)
 ![Language](https://img.shields.io/badge/C%2B%2B-17-00599C?logo=cplusplus&logoColor=white)
 ![Gateway](https://img.shields.io/badge/gateway-Node%2022-339933?logo=node.js&logoColor=white)
 ![Tests](https://img.shields.io/badge/tests-112%20passing-2ea043)
-![No runtime](https://img.shields.io/badge/runtime-none%20(static)-555)
+![Runtime](https://img.shields.io/badge/runtime-none%20(static)-555)
 
-<img src="docs/architecture.svg" alt="Архитектура PortalVNC" width="860" />
+<br/>
+
+<img src="docs/architecture.svg" alt="PortalVNC architecture" width="880" />
 
 </div>
 
 ---
 
-## Зачем это
+## Why PortalVNC
 
-Обычный VNC/RDP неудобен для парка Windows-машин, где администраторы могут быть на
-разных локалях (английская, русская, турецкая…) и в разных структурах (домен и
-рабочие группы). PortalVNC решает это так:
+Plain VNC and RDP are awkward for a fleet of Windows machines, where administrators
+may run different locales (English, Russian, Turkish…) and machines may be domain-joined
+or standalone. PortalVNC is designed around those realities:
 
-- **Доступ по SID, а не по имени группы.** Пускаются члены локальной группы
-  «Администраторы» (`S-1-5-32-544`) — работает на любой локали Windows. Доменные
-  администраторы покрываются автоматически.
-- **Вход учётной записью Windows.** Пароль проверяет сама ОС (`LogonUser`) —
-  собственного хранилища паролей нет.
-- **Шифрованный канал с взаимной проверкой сертификатов (mTLS).** Посторонний
-  VNC-клиент к агенту не подключится.
-- **Лёгкий и автономный.** Нативные exe со статической линковкой, минимум файлов
-  рядом. Никаких .NET и прочих рантаймов.
+- **Authorized by SID, not by group name.** Access is granted to members of the local
+  **Administrators** group (`S-1-5-32-544`) — which works on *any* Windows UI language.
+  Domain admins are covered automatically.
+- **Windows account login.** Credentials are verified by the OS itself (`LogonUser`) —
+  there is no separate password store.
+- **Encrypted channel with mutual TLS.** The agent only accepts clients holding a
+  certificate signed by your CA; a stock VNC client cannot connect.
+- **Lightweight and self-contained.** Native executables, statically linked, a handful of
+  files on disk. No .NET or other runtimes to install.
 
-## Возможности
+## Features
 
 | | |
 |---|---|
-| 🔐 **mTLS** | Взаимная проверка сертификатов; клиент без сертификата нашего CA отклоняется до обмена данными |
-| 🪪 **Авторизация по SID** | Группа «Администраторы» по `S-1-5-32-544` + произвольные доп. SID из конфига |
-| 🖥️ **Служба Windows** | Автозапуск, значок «сетевой компьютер» в трее (по настройке, по умолчанию выключен) |
-| 🔒 **Экран блокировки и UAC** | Захват и ввод на Secure Desktop (служба в session 0 + рабочий в сессии) |
-| 🧑‍🤝‍🧑 **Несколько операторов** | Один поток кадров на всех; на терминальном сервере — рабочий на каждую сессию |
-| 🌐 **Браузерный доступ** | Шлюз + noVNC для встраивания в веб-портал, учётные данные не уходят в браузер |
-| 🧩 **Три клиента** | нативный просмотрщик-exe, браузер (noVNC), библиотека для портала |
-| 📦 **MSI** | Установщик с регистрацией службы и правилом брандмауэра, раздаётся по GPO |
+| 🔐 **Mutual TLS** | Both sides verify certificates; a client without your CA's certificate is dropped before any data is exchanged |
+| 🪪 **SID-based authorization** | Administrators group by `S-1-5-32-544`, plus any extra SIDs from config — locale-independent |
+| 🖥️ **Windows service** | Auto-start, optional "network computer" tray icon (off by default — unattended mode) |
+| 🔒 **Lock screen & UAC** | Capture and input on the Secure Desktop (session-0 service + in-session worker) |
+| 🧑‍🤝‍🧑 **Multiple operators** | One frame stream shared by all; on a terminal server, one worker per session |
+| 🌐 **Browser access** | Gateway + noVNC for embedding in a web portal — credentials never reach the browser |
+| 🧩 **Three clients** | Native viewer executable, browser (noVNC), and a reusable library for your portal |
+| 📦 **MSI installer** | Registers the service and a firewall rule; deployable via Group Policy |
 
-## Скриншот
+## How it works
 
-Рабочий стол Windows в браузере через `браузер (noVNC) → шлюз → агент`:
-
-<img src="docs/browser-viewer-working.jpg" alt="PortalVNC в браузере" width="820" />
-
-## Кейсы применения
-
-- **Администрирование парка машин.** Подключение к рабочим станциям в домене и в
-  рабочих группах под любой учётной записью из «Администраторов», независимо от
-  языка Windows.
-- **Поддержка пользователей из портала.** Сотрудник открывает компьютер в веб-портале
-  и видит рабочий стол прямо в браузере — без установки клиента.
-- **Терминальный сервер.** Несколько RDP-сессий: служба поднимает рабочего на каждую
-  активную сессию (консоль — на базовом порту, остальные — на `база + sessionId`).
-- **Экран блокировки и UAC.** Администратор продолжает видеть и управлять машиной на
-  заблокированном экране и в окнах запроса прав.
-- **Встраивание в свои продукты.** Шлюз (`gateway/pvnc.js`) переиспользуется как
-  библиотека для подключения к агенту из любого Node-сервиса.
-
-## Как это работает
+<div align="center">
+<img src="docs/handshake.svg" alt="PortalVNC connection flow" width="820" />
+</div>
 
 ```
-Браузер (noVNC) ──wss──► Шлюз ──mTLS + рукопожатие──► Агент ──RFB──► рабочий стол
-Просмотрщик-exe  ─────────── mTLS + рукопожатие ─────► Агент (напрямую, минуя шлюз)
+Browser (noVNC) ──wss──► Gateway ──mTLS + handshake──► Agent ──RFB──► desktop
+Native viewer   ───────────── mTLS + handshake ──────► Agent  (direct, bypasses the gateway)
 ```
 
-1. **TLS со взаимной проверкой** — агент принимает только клиента с сертификатом от
-   нашего CA.
-2. **Рукопожатие** — обмен версиями протокола, затем учётные данные Windows.
-3. **Авторизация** — `LogonUser` + проверка SID группы «Администраторы».
-4. **RFB** — стандартный поток VNC внутри TLS-туннеля (поэтому в браузере работает
-   обычный noVNC).
+The desktop stream is standard **RFB** carried inside the TLS tunnel — which is exactly why
+an ordinary **noVNC** client works in the browser, while the custom handshake and mutual
+TLS keep everyone else out.
 
-## Быстрый старт (локально)
+## Use cases
 
-Требуется: Visual Studio Build Tools 2022 (C++), Windows SDK 10, CMake ≥ 3.25,
-[vcpkg](https://github.com/microsoft/vcpkg) в `./vcpkg`, Node 22 (для шлюза).
+- **Fleet administration.** Connect to workstations in a domain or workgroup under any
+  account in *Administrators*, regardless of the machine's Windows language.
+- **Help desk from the portal.** A user opens a computer in the web portal and sees the
+  desktop right in the browser — nothing to install on the client.
+- **Terminal servers.** With several RDP sessions, the service runs one worker per active
+  session (the console on the base port, others on `base + sessionId`).
+- **Lock screen & elevation.** Keep viewing and controlling a machine on the lock screen
+  and through UAC prompts.
+- **Embed in your own product.** The gateway (`gateway/pvnc.js`) is a small, reusable
+  library for connecting to an agent from any Node service.
+
+## Quick start
+
+**Prerequisites:** Visual Studio Build Tools 2022 (C++), Windows SDK 10, CMake ≥ 3.25,
+[vcpkg](https://github.com/microsoft/vcpkg) in `./vcpkg`, and Node 22 (for the gateway).
 
 ```powershell
-# сборка
+# build
 cmake --preset default
 cmake --build --preset default
 
-# dev-сертификаты (CA + агент + клиент) и локальный запуск
+# dev certificates (CA + agent + client) and a local run
 powershell -ExecutionPolicy Bypass -File tools\make-dev-certs.ps1
 powershell -ExecutionPolicy Bypass -File tools\run-local-slice.ps1
 ```
 
-Скрипт запустит агент на `127.0.0.1:7654` и напечатает команду просмотрщика
-(спросит пароль Windows). Браузерный путь: запустить агент, затем
-`node gateway\server.js` с конфигом и открыть `http://localhost:8787/`
-(подробности — [gateway/README.md](gateway/README.md)).
+`run-local-slice.ps1` starts the agent on `127.0.0.1:7654` and prints the viewer command
+(it will prompt for a Windows password). For the browser path, start the agent, then run
+`node gateway\server.js` with a config and open `http://localhost:8787/` — see
+[gateway/README.md](gateway/README.md).
 
-**Служба и MSI:**
+**Service and MSI:**
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File tools\install-service.ps1   # dev, самоподнимается
+powershell -ExecutionPolicy Bypass -File tools\install-service.ps1   # dev, self-elevating
 powershell -ExecutionPolicy Bypass -File installer\build-msi.ps1     # -> installer\PortalVNC.msi
 ```
 
-## Структура репозитория
+Prebuilt binaries and the MSI are attached to every [release](https://github.com/iSmartyPRO/portal-vnc/releases).
 
-| Папка | Назначение |
+## Project layout
+
+| Directory | Purpose |
 |---|---|
-| [`protocol/`](protocol) | Общий модуль: mTLS (mbedTLS), рукопожатие, версии, вход + SID |
-| [`agent/`](agent) | Агент: служба, захват, ввод, RFB поверх mTLS, трей, мультисессии |
-| [`viewer/`](viewer) | Нативный просмотрщик (окно Win32) |
-| [`gateway/`](gateway) | Мост браузер↔агент (Node) + noVNC, для портала |
-| [`installer/`](installer) | MSI-установщик (WiX): служба + брандмауэр |
-| [`tools/`](tools) | Скрипты: сертификаты, запуск, установка службы |
-| [`docs/`](docs) | Дизайн, планы, статус |
+| [`protocol/`](protocol) | Shared module: mutual TLS (mbedTLS), handshake, versioning, logon + SID |
+| [`agent/`](agent) | Agent: service, capture, input, RFB over mTLS, tray, multi-session |
+| [`viewer/`](viewer) | Native viewer (Win32 window) |
+| [`gateway/`](gateway) | Browser↔agent bridge (Node) + noVNC, for the portal |
+| [`installer/`](installer) | WiX MSI: service + firewall rule |
+| [`tools/`](tools) | Scripts: certificates, local run, service install |
+| [`docs/`](docs) | Design, plans, status |
 
-## Безопасность
+## Security
 
-- Взаимный TLS: агент доверяет только сертификатам своего CA.
-- Авторизация по членству в группе «Администраторы» (SID, любая локаль) + доп. SID.
-- `allowedClients` (IP/CIDR); пустой список = не пускать никого.
-- Пароль проверяется ОС и затирается в памяти после использования; в журнал не пишется.
-- Значок в трее — по настройке (прозрачность для пользователя при необходимости).
+- Mutual TLS: the agent trusts only certificates signed by your CA.
+- Authorization by membership in the Administrators group (SID, any locale) plus extra SIDs.
+- `allowedClients` (IP / CIDR); an empty list denies everyone.
+- The password is verified by the OS and wiped from memory after use; it is never logged.
+- The tray icon is configurable (transparency for the user when required).
 
-## Статус
+## Status
 
-Все основные части реализованы и протестированы (112 автотестов: 40 — протокол,
-72 — агент; плюс живые проверки). Что проверено автоматически/вживую и что требует
-проверки в реальной среде (домен, терминальный сервер, GPO, боевые сертификаты) —
-см. [docs/STATUS.md](docs/STATUS.md).
+All core components are implemented and tested (112 automated tests: 40 for the protocol,
+72 for the agent, plus live checks). What is verified automatically versus what needs
+validation in a real environment (domain, terminal server, GPO, production certificates)
+is tracked in [docs/STATUS.md](docs/STATUS.md).
 
-## Лицензия
+## License
 
-[GPLv3](LICENSE) — из-за совместимости с экосистемой VNC.
+[GPLv3](LICENSE) — for compatibility with the VNC ecosystem.
