@@ -96,6 +96,8 @@ function connectAgent(opts) {
         const authRefuse = ar.readUInt16BE(0);
         if (authRefuse !== 0) throw refuseErr(authRefuse);
 
+        // Session mode: 0 = screen (RFB). Required by the agent before RFB.
+        socket.write(Buffer.from([0x00]));
         resolve(socket); // RFB flows from here
       } catch (e) {
         socket.destroy();
