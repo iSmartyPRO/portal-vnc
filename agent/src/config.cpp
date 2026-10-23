@@ -40,8 +40,15 @@ AgentConfig parseConfig(const std::string& jsonText) {
   }
   if (j.contains("allowedClients"))
     for (const auto& e : j["allowedClients"]) c.allowedClients.push_back(e.get<std::string>());
-  if (j.contains("access") && j["access"].contains("sids"))
-    for (const auto& e : j["access"]["sids"]) c.accessSids.push_back(toW(e.get<std::string>()));
+  if (j.contains("access")) {
+    const auto& a = j["access"];
+    if (a.contains("sids"))
+      for (const auto& e : a["sids"]) c.accessSids.push_back(toW(e.get<std::string>()));
+    if (a.contains("users"))
+      for (const auto& e : a["users"]) c.accessUsers.push_back(toW(e.get<std::string>()));
+    if (a.contains("groups"))
+      for (const auto& e : a["groups"]) c.accessGroups.push_back(toW(e.get<std::string>()));
+  }
   if (j.contains("logFile")) c.logFile = j["logFile"].get<std::string>();
   return c;
 }

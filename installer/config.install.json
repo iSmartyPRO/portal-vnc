@@ -9,6 +9,6 @@
     "ca": "C:\\ProgramData\\PortalVNC\\devca.crt"
   },
   "allowedClients": [],
-  "access": { "sids": [] },
+  "access": { "groups": [], "users": [], "sids": [] },
   "logFile": "C:\\ProgramData\\PortalVNC\\pvnc-agent.log"
 }

@@ -1,6 +1,6 @@
 {
   "name": "portalvnc",
-  "version-string": "0.1.3",
+  "version-string": "0.1.4",
   "description": "Secure interactive remote access to Windows machines (VNC-based).",
   "homepage": "https://github.com/iSmartyPRO/PortalVNC",
   "license": "GPL-3.0-or-later",

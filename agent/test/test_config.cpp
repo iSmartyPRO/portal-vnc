@@ -18,7 +18,7 @@ TEST_CASE("parses full config", "[config]") {
     "port": 5900,
     "tls": {"cert":"a.crt","key":"a.key","ca":"ca.crt"},
     "allowedClients": ["192.168.1.0/24"],
-    "access": {"sids": ["S-1-5-21-1-2-3-1000"]},
+    "access": {"sids": ["S-1-5-21-1-2-3-1000"], "users": ["CORP\\jdoe"], "groups": ["Helpdesk", "CORP\\Admins"]},
     "logFile": "x.log"
   })");
   CHECK(c.trayIcon);
@@ -26,6 +26,9 @@ TEST_CASE("parses full config", "[config]") {
   CHECK(c.tlsCert == "a.crt");
   CHECK(c.allowedClients.size() == 1);
   CHECK(c.accessSids.size() == 1);
+  CHECK(c.accessUsers.size() == 1);
+  CHECK(c.accessUsers[0] == L"CORP\\jdoe");
+  CHECK(c.accessGroups.size() == 2);
   CHECK(c.logFile == "x.log");
 }
 

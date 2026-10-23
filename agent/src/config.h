@@ -15,7 +15,12 @@ struct AgentConfig {
   std::string tlsKey;                    // path to agent private key (PEM)
   std::string tlsCa;                     // path to trusted CA (PEM)
   std::vector<std::string> allowedClients;  // IPs / IPv4 CIDRs; empty => deny all
-  std::vector<std::wstring> accessSids;     // extra SIDs beyond builtin admins
+  // Authorization beyond the built-in Administrators group. A connection is
+  // allowed if the logged-on user is an Administrator, OR is a member of any
+  // listed group, OR is one of the listed users, OR its token holds any listed SID.
+  std::vector<std::wstring> accessSids;     // raw SIDs (SDDL form, e.g. "S-1-5-21-...")
+  std::vector<std::wstring> accessUsers;    // user names, e.g. "CORP\\jdoe" or "jdoe"
+  std::vector<std::wstring> accessGroups;   // group names, e.g. "CORP\\Helpdesk"
   std::string logFile;                   // local connection log path
 };
 

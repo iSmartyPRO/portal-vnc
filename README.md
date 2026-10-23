@@ -133,7 +133,9 @@ gateway). For production, replace the generated certificates with ones from your
 ## Security
 
 - Mutual TLS: the agent trusts only certificates signed by your CA.
-- Authorization by membership in the Administrators group (SID, any locale) plus extra SIDs.
+- Authorization by membership in the Administrators group (SID, any locale), plus optional
+  allow-lists of groups and users by name (`access.groups`, `access.users`, e.g.
+  `CORP\Helpdesk`, `jdoe`) and raw SIDs (`access.sids`).
 - `allowedClients` (IP / CIDR); an empty list denies everyone.
 - The password is verified by the OS and wiped from memory after use; it is never logged.
 - The tray icon is configurable (transparency for the user when required).

@@ -43,6 +43,23 @@ TEST_CASE("tokenHasSid detects builtin Administrators when elevated", "[auth]") 
   CloseHandle(token);
 }
 
+TEST_CASE("tokenIsUser matches the current account, rejects unknown", "[auth]") {
+  HANDLE token = nullptr;
+  REQUIRE(OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY | TOKEN_DUPLICATE, &token));
+  wchar_t name[256]; DWORD n = 256;
+  REQUIRE(GetUserNameW(name, &n));
+  CHECK(tokenIsUser(token, std::wstring(name, n - 1)));
+  CHECK_FALSE(tokenIsUser(token, L"pvnc_no_such_user_zzz"));
+  CloseHandle(token);
+}
+
+TEST_CASE("tokenInNamedGroup rejects an unknown group", "[auth]") {
+  HANDLE token = nullptr;
+  REQUIRE(OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY | TOKEN_DUPLICATE, &token));
+  CHECK_FALSE(tokenInNamedGroup(token, L"pvnc_no_such_group_zzz"));
+  CloseHandle(token);
+}
+
 TEST_CASE("authenticate rejects a wrong password as BadCredentials", "[auth]") {
   Credentials creds;
   creds.user = L"pvnc_no_such_user_zzz";

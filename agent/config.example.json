@@ -9,7 +9,9 @@
   },
   "allowedClients": ["127.0.0.1", "10.0.0.0/8"],
   "access": {
-    "sids": []
+    "groups": ["CORP\\Helpdesk", "Administrators"],
+    "users": ["CORP\\jdoe"],
+    "sids": ["S-1-5-21-1111111111-2222222222-3333333333-1007"]
   },
   "logFile": "C:\\ProgramData\\PortalVNC\\pvnc-agent.log"
 }

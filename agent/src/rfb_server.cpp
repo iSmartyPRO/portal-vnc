@@ -259,7 +259,8 @@ int RfbServer::run() {
         sendAuthResult(conn, hs.refuse);
         return;
       }
-      AuthOutcome outcome = authenticate(hs.creds, cfg_.accessSids);
+      AccessPolicy policy{cfg_.accessSids, cfg_.accessUsers, cfg_.accessGroups};
+      AuthOutcome outcome = authenticate(hs.creds, policy);
       hs.creds.wipe();
       sendAuthResult(conn, toRefuse(outcome));
       if (outcome != AuthOutcome::Ok) return;

@@ -2,6 +2,9 @@
 
 #include <sddl.h>
 
+#include <cstdlib>
+#include <vector>
+
 #pragma comment(lib, "advapi32.lib")
 
 namespace pvnc {
@@ -47,10 +50,49 @@ struct AdminSid {
   }
 };
 
+// Resolves an account/group name (e.g. "CORP\\Helpdesk", "jdoe", ".\\Admins")
+// to a SID. Caller frees with free(). Returns nullptr if unknown.
+PSID lookupSid(const std::wstring& name) {
+  DWORD cbSid = 0, cbDom = 0;
+  SID_NAME_USE use;
+  LookupAccountNameW(nullptr, name.c_str(), nullptr, &cbSid, nullptr, &cbDom, &use);
+  if (cbSid == 0) return nullptr;
+  PSID sid = static_cast<PSID>(malloc(cbSid));
+  std::vector<wchar_t> dom(cbDom ? cbDom : 1);
+  if (!sid) return nullptr;
+  if (!LookupAccountNameW(nullptr, name.c_str(), sid, &cbSid, dom.data(), &cbDom, &use)) {
+    free(sid);
+    return nullptr;
+  }
+  return sid;
+}
+
 }  // namespace
 
-AuthOutcome authenticate(const Credentials& creds,
-                         const std::vector<std::wstring>& extraSids) {
+bool tokenInNamedGroup(HANDLE token, const std::wstring& groupName) {
+  PSID sid = lookupSid(groupName);
+  if (!sid) return false;
+  bool has = tokenHasSid(token, sid);
+  free(sid);
+  return has;
+}
+
+bool tokenIsUser(HANDLE token, const std::wstring& accountName) {
+  PSID want = lookupSid(accountName);
+  if (!want) return false;
+  DWORD cb = 0;
+  GetTokenInformation(token, TokenUser, nullptr, 0, &cb);
+  std::vector<BYTE> buf(cb ? cb : 1);
+  bool eq = false;
+  if (cb && GetTokenInformation(token, TokenUser, buf.data(), cb, &cb)) {
+    PSID userSid = reinterpret_cast<TOKEN_USER*>(buf.data())->User.Sid;
+    eq = EqualSid(userSid, want) == TRUE;
+  }
+  free(want);
+  return eq;
+}
+
+AuthOutcome authenticate(const Credentials& creds, const AccessPolicy& policy) {
   HANDLE token = nullptr;
   const wchar_t* domain = creds.domain.empty() ? nullptr : creds.domain.c_str();
   BOOL ok = LogonUserW(creds.user.c_str(), domain, creds.password.c_str(),
@@ -62,21 +104,21 @@ AuthOutcome authenticate(const Credentials& creds,
   AuthOutcome result = AuthOutcome::NotAdmin;
 
   AdminSid admin;
-  if (admin.sid && tokenHasSid(token, admin.sid)) {
-    result = AuthOutcome::Ok;
-  } else {
-    for (const auto& s : extraSids) {
+  auto authorized = [&]() -> bool {
+    if (admin.sid && tokenHasSid(token, admin.sid)) return true;  // built-in Administrators
+    for (const auto& g : policy.groups) if (tokenInNamedGroup(token, g)) return true;
+    for (const auto& u : policy.users) if (tokenIsUser(token, u)) return true;
+    for (const auto& s : policy.sids) {
       PSID extra = nullptr;
       if (ConvertStringSidToSidW(s.c_str(), &extra)) {
         bool has = tokenHasSid(token, extra);
         LocalFree(extra);
-        if (has) {
-          result = AuthOutcome::Ok;
-          break;
-        }
+        if (has) return true;
       }
     }
-  }
+    return false;
+  };
+  if (authorized()) result = AuthOutcome::Ok;
 
   CloseHandle(token);
   return result;
