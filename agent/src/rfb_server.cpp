@@ -8,6 +8,7 @@
 #include <thread>
 #include <vector>
 
+#include "control_server.h"
 #include "pvnc/auth.h"
 #include "pvnc/handshake.h"
 #include "pvnc/rfb.h"
@@ -264,7 +265,12 @@ int RfbServer::run() {
       hs.creds.wipe();
       sendAuthResult(conn, toRefuse(outcome));
       if (outcome != AuthOutcome::Ok) return;
-      serveClient(conn);
+      // The client picks what this connection is for: the desktop stream, or a
+      // control channel (system info / file transfer).
+      auto mode = readSessionMode(conn);
+      if (!mode) return;
+      if (*mode == SessionMode::Control) serveControl(conn);
+      else serveClient(conn);
     }).detach();
   }
 

@@ -48,8 +48,18 @@ class RfbClient {
   void pushPointer(uint8_t buttonMask, int x, int y);
   void pushKey(uint32_t keysym, bool down);
 
+  // Opens a short-lived control connection and returns the agent's system
+  // information as a JSON string. Blocking; safe to call from the UI thread.
+  bool fetchSystemInfo(std::string& jsonOut);
+
+  // Request a full (non-incremental) framebuffer update on the next loop.
+  void requestRefresh() { fullRefresh_.store(true); }
+
  private:
   void runLoop();
+  // Dials, does the mTLS + PortalVNC handshake + auth, and sends the session
+  // mode. Returns None on success (out is ready for RFB or control traffic).
+  RefuseCode dialAndAuth(TlsConn& out, SessionMode mode);
   bool rfbHandshake();            // RFB 3.8 init after our auth
   bool sendFbUpdateRequest(bool incremental);
   bool drainInput();              // send queued input events
@@ -60,6 +70,7 @@ class RfbClient {
   TlsConn conn_;
   std::thread thread_;
   std::atomic<bool> running_{false};
+  std::atomic<bool> fullRefresh_{false};
 
   int width_ = 0, height_ = 0;
   std::mutex fbMu_;

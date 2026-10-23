@@ -2,12 +2,17 @@
 
 #include <windowsx.h>
 
+#include <string>
+
 #include "resource.h"
+#include "sysinfo_dialog.h"
 
 namespace pvnc {
 
 namespace {
 constexpr UINT WM_FRAME = WM_APP + 1;
+constexpr int kToolbarH = 36;
+enum { ID_INFO = 201, ID_CAD = 202, ID_REFRESH = 203, ID_FULLSCREEN = 204, ID_FILES = 205 };
 const wchar_t* kClass = L"PortalVncViewerWnd";
 
 // Maps a Windows virtual-key to an X11 keysym for the non-character keys.
@@ -51,6 +56,7 @@ bool ViewerWindow::create(const wchar_t* title) {
   wc.hInstance = GetModuleHandleW(nullptr);
   wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
   wc.hIcon = LoadIconW(GetModuleHandleW(nullptr), MAKEINTRESOURCEW(IDI_APPICON));
+  wc.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_BTNFACE + 1);
   wc.lpszClassName = kClass;
   RegisterClassW(&wc);
 
@@ -68,6 +74,28 @@ bool ViewerWindow::create(const wchar_t* title) {
   client_.onFrameUpdated([this] { PostMessageW(hwnd_, WM_FRAME, 0, 0); });
   ShowWindow(hwnd_, SW_SHOW);
   return true;
+}
+
+void ViewerWindow::createToolbar(HWND h) {
+  HINSTANCE inst = GetModuleHandleW(nullptr);
+  struct { int id; const wchar_t* text; } btns[] = {
+      {ID_INFO, L"Computer info"}, {ID_CAD, L"Ctrl+Alt+Del"},
+      {ID_REFRESH, L"Refresh"}, {ID_FULLSCREEN, L"Fullscreen"},
+  };
+  int x = 6;
+  for (auto& b : btns) {
+    int w = (b.id == ID_CAD) ? 96 : (b.id == ID_INFO ? 100 : 82);
+    HWND btn = CreateWindowExW(0, L"BUTTON", b.text, WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+                               x, 5, w, 26, h, reinterpret_cast<HMENU>(static_cast<INT_PTR>(b.id)),
+                               inst, nullptr);
+    SendMessageW(btn, WM_SETFONT, (WPARAM)GetStockObject(DEFAULT_GUI_FONT), TRUE);
+    x += w + 4;
+  }
+}
+
+void ViewerWindow::layout(HWND h) {
+  // Buttons are placed in createToolbar at fixed positions; nothing to reflow.
+  InvalidateRect(h, nullptr, FALSE);
 }
 
 int ViewerWindow::runMessageLoop() {
@@ -91,10 +119,12 @@ LRESULT CALLBACK ViewerWindow::wndProc(HWND h, UINT m, WPARAM w, LPARAM l) {
 
 void ViewerWindow::sendPointer(HWND h, WPARAM wParam, int cx, int cy, int wheel) {
   RECT rc; GetClientRect(h, &rc);
-  int cw = rc.right - rc.left, ch = rc.bottom - rc.top;
+  int cw = rc.right - rc.left, ch = rc.bottom - rc.top - kToolbarH;  // framebuffer area
   if (cw <= 0 || ch <= 0 || client_.width() == 0) return;
+  int ay = cy - kToolbarH;  // y within the framebuffer area
+  if (ay < 0) return;       // over the toolbar, not the desktop
   int rx = int((long long)cx * client_.width() / cw);
-  int ry = int((long long)cy * client_.height() / ch);
+  int ry = int((long long)ay * client_.height() / ch);
 
   uint8_t b = 0;
   if (wParam & MK_LBUTTON) b |= 0x01;
@@ -123,6 +153,15 @@ void ViewerWindow::mapAndSendKey(WPARAM vk, LPARAM lParam, bool down) {
 
 LRESULT ViewerWindow::handle(HWND h, UINT m, WPARAM w, LPARAM l) {
   switch (m) {
+    case WM_CREATE:
+      createToolbar(h);
+      return 0;
+    case WM_SIZE:
+      layout(h);
+      return 0;
+    case WM_COMMAND:
+      onCommand(h, LOWORD(w));
+      return 0;
     case WM_FRAME:
       InvalidateRect(h, nullptr, FALSE);
       return 0;
@@ -140,7 +179,7 @@ LRESULT ViewerWindow::handle(HWND h, UINT m, WPARAM w, LPARAM l) {
         bi.bmiHeader.biCompression = BI_RGB;
         RECT rc; GetClientRect(h, &rc);
         SetStretchBltMode(dc, HALFTONE);
-        StretchDIBits(dc, 0, 0, rc.right - rc.left, rc.bottom - rc.top,
+        StretchDIBits(dc, 0, kToolbarH, rc.right - rc.left, rc.bottom - rc.top - kToolbarH,
                       0, 0, fw, fh, bgra, &bi, DIB_RGB_COLORS, SRCCOPY);
       });
       EndPaint(h, &ps);
@@ -171,6 +210,57 @@ LRESULT ViewerWindow::handle(HWND h, UINT m, WPARAM w, LPARAM l) {
       return 0;
   }
   return DefWindowProcW(h, m, w, l);
+}
+
+void ViewerWindow::sendCtrlAltDel() {
+  // Ctrl+Alt+Del to the remote. Note: on the secure desktop this requires SAS
+  // support on the agent; for normal desktop apps the key sequence applies.
+  client_.pushKey(0xFFE3, true);   // Control
+  client_.pushKey(0xFFE9, true);   // Alt
+  client_.pushKey(0xFFFF, true);   // Delete
+  client_.pushKey(0xFFFF, false);
+  client_.pushKey(0xFFE9, false);
+  client_.pushKey(0xFFE3, false);
+}
+
+void ViewerWindow::toggleFullscreen(HWND h) {
+  if (!fullscreen_) {
+    savedStyle_ = GetWindowLongW(h, GWL_STYLE);
+    savedPlacement_.length = sizeof(savedPlacement_);
+    GetWindowPlacement(h, &savedPlacement_);
+    MONITORINFO mi{sizeof(mi)};
+    GetMonitorInfoW(MonitorFromWindow(h, MONITOR_DEFAULTTONEAREST), &mi);
+    SetWindowLongW(h, GWL_STYLE, savedStyle_ & ~WS_OVERLAPPEDWINDOW);
+    SetWindowPos(h, HWND_TOP, mi.rcMonitor.left, mi.rcMonitor.top,
+                 mi.rcMonitor.right - mi.rcMonitor.left, mi.rcMonitor.bottom - mi.rcMonitor.top,
+                 SWP_FRAMECHANGED | SWP_SHOWWINDOW);
+    fullscreen_ = true;
+  } else {
+    SetWindowLongW(h, GWL_STYLE, savedStyle_);
+    SetWindowPlacement(h, &savedPlacement_);
+    SetWindowPos(h, nullptr, 0, 0, 0, 0,
+                 SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_SHOWWINDOW);
+    fullscreen_ = false;
+  }
+  SetFocus(h);
+}
+
+void ViewerWindow::onCommand(HWND h, int id) {
+  switch (id) {
+    case ID_INFO: {
+      SetCursor(LoadCursor(nullptr, IDC_WAIT));
+      std::string j;
+      bool ok = client_.fetchSystemInfo(j);
+      SetCursor(LoadCursor(nullptr, IDC_ARROW));
+      if (ok) showSystemInfo(h, j);
+      else MessageBoxW(h, L"Could not retrieve system information.", L"PortalVNC", MB_ICONWARNING);
+      break;
+    }
+    case ID_CAD: sendCtrlAltDel(); break;
+    case ID_REFRESH: client_.requestRefresh(); break;
+    case ID_FULLSCREEN: toggleFullscreen(h); break;
+  }
+  SetFocus(h);  // return keyboard focus to the desktop view
 }
 
 }  // namespace pvnc

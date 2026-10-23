@@ -8,6 +8,8 @@ add_library(pvnc_agent_core STATIC
   src/capture_hub.cpp
   src/input.cpp
   src/rfb_server.cpp
+  src/control_server.cpp
+  src/sysinfo.cpp
   src/service.cpp
   src/tray.cpp
 )
@@ -15,7 +17,7 @@ target_include_directories(pvnc_agent_core PUBLIC src)
 target_link_libraries(pvnc_agent_core
   PUBLIC  pvnc_protocol
   PRIVATE nlohmann_json::nlohmann_json ws2_32 gdi32 user32 advapi32
-          wtsapi32 userenv shell32
+          wtsapi32 userenv shell32 iphlpapi netapi32
 )
 
 add_executable(pvnc_agent

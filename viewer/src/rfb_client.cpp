@@ -5,6 +5,7 @@
 
 #include <cstring>
 
+#include "pvnc/control.h"
 #include "pvnc/rfb.h"
 
 #pragma comment(lib, "ws2_32.lib")
@@ -32,9 +33,10 @@ void RfbClient::stop() {
   running_.store(false);
   if (thread_.joinable()) thread_.join();
   conn_.close();
+  opt_.creds.wipe();  // kept during the session for control connections
 }
 
-RefuseCode RfbClient::connect() {
+RefuseCode RfbClient::dialAndAuth(TlsConn& out, SessionMode mode) {
   ensureWinsock();
   addrinfo hints{}; hints.ai_family = AF_INET; hints.ai_socktype = SOCK_STREAM;
   addrinfo* res = nullptr;
@@ -47,22 +49,41 @@ RefuseCode RfbClient::connect() {
   if (rc != 0) { closesocket(raw); return RefuseCode::BadHandshake; }
 
   try {
-    conn_ = ctx_.connect(raw);
+    out = ctx_.connect(raw);  // closes raw itself on failure
   } catch (const TlsError&) {
-    return RefuseCode::NotAllowed;  // TLS/cert rejected
+    return RefuseCode::NotAllowed;
   }
 
-  auto hs = clientHandshake(conn_, opt_.creds);
-  opt_.creds.wipe();
+  auto hs = clientHandshake(out, opt_.creds);
   if (!hs.ok) return hs.refuse;
-  RefuseCode authRes = readAuthResult(conn_);
+  RefuseCode authRes = readAuthResult(out);
   if (authRes != RefuseCode::None) return authRes;
+  if (!sendSessionMode(out, mode)) return RefuseCode::BadHandshake;
+  return RefuseCode::None;
+}
 
+RefuseCode RfbClient::connect() {
+  RefuseCode r = dialAndAuth(conn_, SessionMode::Screen);
+  if (r != RefuseCode::None) return r;
   if (!rfbHandshake()) return RefuseCode::BadHandshake;
-
   running_.store(true);
   thread_ = std::thread([this] { runLoop(); });
   return RefuseCode::None;
+}
+
+bool RfbClient::fetchSystemInfo(std::string& jsonOut) {
+  TlsConn c;
+  if (dialAndAuth(c, SessionMode::Control) != RefuseCode::None) return false;
+  uint8_t op = ctl::kSysInfo;
+  if (!c.writeFull(&op, 1)) return false;
+  uint8_t hdr[5];
+  if (!c.readFull(hdr, 5)) return false;
+  if (hdr[0] != ctl::kOk) return false;
+  uint32_t len = (uint32_t(hdr[1]) << 24) | (hdr[2] << 16) | (hdr[3] << 8) | hdr[4];
+  std::string payload(len, '\0');
+  if (len && !c.readFull(payload.data(), len)) return false;
+  jsonOut = std::move(payload);
+  return true;
 }
 
 bool RfbClient::rfbHandshake() {
@@ -173,6 +194,10 @@ void RfbClient::runLoop() {
   bool outstanding = true;  // we sent a full request at the end of handshake
   while (running_.load()) {
     if (!drainInput()) break;
+    if (fullRefresh_.exchange(false)) {
+      if (!sendFbUpdateRequest(false)) break;  // operator asked for a full redraw
+      outstanding = true;
+    }
     uint8_t type = 0;
     auto st = conn_.readFullOrIdle(&type, 1);
     if (st == TlsConn::ReadState::Closed || st == TlsConn::ReadState::Error) break;

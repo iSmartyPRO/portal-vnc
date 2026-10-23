@@ -19,11 +19,19 @@ class ViewerWindow {
  private:
   static LRESULT CALLBACK wndProc(HWND, UINT, WPARAM, LPARAM);
   LRESULT handle(HWND, UINT, WPARAM, LPARAM);
+  void createToolbar(HWND);
+  void layout(HWND);
+  void onCommand(HWND, int id);
+  void sendCtrlAltDel();
+  void toggleFullscreen(HWND);
   void sendPointer(HWND, WPARAM wParam, int clientX, int clientY, int wheel);
   void mapAndSendKey(WPARAM vk, LPARAM lParam, bool down);
 
   RfbClient& client_;
   HWND hwnd_ = nullptr;
+  bool fullscreen_ = false;
+  WINDOWPLACEMENT savedPlacement_{};
+  LONG savedStyle_ = 0;
 };
 
 }  // namespace pvnc

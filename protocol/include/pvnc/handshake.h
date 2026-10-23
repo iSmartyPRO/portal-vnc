@@ -37,4 +37,13 @@ bool sendAuthResult(TlsConn& conn, RefuseCode refuse);
 // Client side: read the auth outcome sent by sendAuthResult.
 RefuseCode readAuthResult(TlsConn& conn);
 
+// What an authenticated connection is used for. The client sends this right
+// after a successful auth; the server branches on it.
+enum class SessionMode : uint8_t {
+  Screen = 0,   // RFB desktop stream
+  Control = 1,  // request/response: system info, file transfer
+};
+bool sendSessionMode(TlsConn& conn, SessionMode mode);
+std::optional<SessionMode> readSessionMode(TlsConn& conn);
+
 }  // namespace pvnc

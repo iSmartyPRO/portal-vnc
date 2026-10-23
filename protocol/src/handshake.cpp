@@ -139,4 +139,15 @@ RefuseCode readAuthResult(TlsConn& conn) {
   return static_cast<RefuseCode>((uint16_t(b[0]) << 8) | b[1]);
 }
 
+bool sendSessionMode(TlsConn& conn, SessionMode mode) {
+  uint8_t b = static_cast<uint8_t>(mode);
+  return conn.writeFull(&b, 1);
+}
+std::optional<SessionMode> readSessionMode(TlsConn& conn) {
+  uint8_t b = 0;
+  if (!conn.readFull(&b, 1)) return std::nullopt;
+  if (b > static_cast<uint8_t>(SessionMode::Control)) return std::nullopt;
+  return static_cast<SessionMode>(b);
+}
+
 }  // namespace pvnc
