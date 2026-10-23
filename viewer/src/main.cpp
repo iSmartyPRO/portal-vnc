@@ -7,15 +7,37 @@
 #include <windows.h>
 #include <shellapi.h>
 
+#include <stdexcept>
 #include <string>
 
 #include "connect_dialog.h"
 #include "rfb_client.h"
 #include "window.h"
 
+#ifndef PVNC_VERSION
+#define PVNC_VERSION "0.0.0"
+#endif
+
 using namespace pvnc;
 
 namespace {
+
+std::wstring fromUtf8(const std::string& s) {
+  if (s.empty()) return {};
+  int n = MultiByteToWideChar(CP_UTF8, 0, s.data(), (int)s.size(), nullptr, 0);
+  std::wstring w(n, L'\0');
+  MultiByteToWideChar(CP_UTF8, 0, s.data(), (int)s.size(), w.data(), n);
+  return w;
+}
+
+bool fileExists(const std::string& utf8path) {
+  std::wstring w;
+  int n = MultiByteToWideChar(CP_UTF8, 0, utf8path.data(), (int)utf8path.size(), nullptr, 0);
+  w.resize(n);
+  MultiByteToWideChar(CP_UTF8, 0, utf8path.data(), (int)utf8path.size(), w.data(), n);
+  DWORD a = GetFileAttributesW(w.c_str());
+  return a != INVALID_FILE_ATTRIBUTES && !(a & FILE_ATTRIBUTE_DIRECTORY);
+}
 
 std::wstring exeDirW() {
   wchar_t buf[MAX_PATH];
@@ -83,6 +105,20 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, LPWSTR, int) {
     if (!showConnectDialog(info)) return 0;  // cancelled
   }
 
+  // Give a precise, friendly error when a certificate file is missing, instead
+  // of a raw TLS failure (or a silent crash from an uncaught exception).
+  for (const auto& [label, path] : {std::pair{L"CA certificate (--ca)", info.caPath},
+                                    std::pair{L"client certificate (--cert)", info.certPath},
+                                    std::pair{L"client key (--key)", info.keyPath}}) {
+    if (!fileExists(path)) {
+      std::wstring m = std::wstring(L"Cannot find the ") + label + L":\n" + fromUtf8(path) +
+                       L"\n\nPlace devca.crt, client.crt and client.key next to the viewer, "
+                       L"or pass --ca/--cert/--key.";
+      MessageBoxW(nullptr, m.c_str(), L"PortalVNC — missing certificate", MB_ICONERROR);
+      return 1;
+    }
+  }
+
   RfbClient::Options opt;
   opt.host = toUtf8(info.host);
   opt.port = info.port;
@@ -92,19 +128,29 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, LPWSTR, int) {
   opt.creds.user = info.user;
   opt.creds.password = info.password;
 
-  RfbClient client(std::move(opt));
-  RefuseCode rc = client.connect();
-  if (rc != RefuseCode::None) {
-    MessageBoxW(nullptr, refuseText(rc), L"PortalVNC — connection failed", MB_ICONERROR);
-    return 1;
-  }
+  try {
+    RfbClient client(std::move(opt));
+    RefuseCode rc = client.connect();
+    if (rc != RefuseCode::None) {
+      MessageBoxW(nullptr, refuseText(rc), L"PortalVNC — connection failed", MB_ICONERROR);
+      return 1;
+    }
 
-  ViewerWindow win(client, info.host);
-  if (!win.create(L"PortalVNC viewer")) {
-    MessageBoxW(nullptr, L"Failed to create the viewer window.", L"PortalVNC", MB_ICONERROR);
+    ViewerWindow win(client, info.host);
+    if (!win.create(L"PortalVNC viewer  " PVNC_VERSION)) {
+      MessageBoxW(nullptr, L"Failed to create the viewer window.", L"PortalVNC", MB_ICONERROR);
+      return 1;
+    }
+    int ret = win.runMessageLoop();
+    client.stop();
+    return ret;
+  } catch (const std::exception& e) {
+    std::wstring m = L"Connection error:\n" + fromUtf8(e.what());
+    MessageBoxW(nullptr, m.c_str(), L"PortalVNC — connection failed", MB_ICONERROR);
+    return 1;
+  } catch (...) {
+    MessageBoxW(nullptr, L"An unknown error occurred while connecting.",
+                L"PortalVNC — connection failed", MB_ICONERROR);
     return 1;
   }
-  int ret = win.runMessageLoop();
-  client.stop();
-  return ret;
 }

@@ -4,6 +4,10 @@
 
 #include "resource.h"
 
+#ifndef PVNC_VERSION
+#define PVNC_VERSION "0.0.0"
+#endif
+
 namespace pvnc {
 
 namespace {
@@ -70,6 +74,9 @@ LRESULT CALLBACK proc(HWND h, UINT m, WPARAM w, LPARAM l) {
       CreateWindowExW(0, L"BUTTON", L"Cancel", WS_CHILD | WS_VISIBLE | WS_TABSTOP,
                       ex + ew - 80, 162, 80, 28, h,
                       reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_CANCEL)), inst, nullptr);
+      // Version label (bottom-left) so the build is visible before connecting.
+      CreateWindowExW(0, L"STATIC", L"PortalVNC  v" PVNC_VERSION, WS_CHILD | WS_VISIBLE,
+                      lx, 168, 180, 18, h, nullptr, inst, nullptr);
 
       // Prefill
       SetWindowTextW(st->host, st->io->host.c_str());
@@ -126,7 +133,7 @@ bool showConnectDialog(ConnectInfo& io) {
   AdjustWindowRect(&r, WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU, FALSE);
   int w = r.right - r.left, hgt = r.bottom - r.top;
   int sx = (GetSystemMetrics(SM_CXSCREEN) - w) / 2, sy = (GetSystemMetrics(SM_CYSCREEN) - hgt) / 2;
-  HWND dlg = CreateWindowExW(0, kClass, L"PortalVNC — Connect",
+  HWND dlg = CreateWindowExW(0, kClass, L"PortalVNC — Connect  " PVNC_VERSION,
                              WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU, sx, sy, w, hgt, nullptr,
                              nullptr, inst, &st);
   if (!dlg) return false;
