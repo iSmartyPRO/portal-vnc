@@ -1,14 +1,14 @@
 {
-  "_comment": "Installed by the MSI as a template. Provision real certificates (agent.crt/key, devca.crt) into this folder and set allowedClients/access before relying on the service. The service reads this config.json next to the exe.",
+  "_comment": "Installed by the MSI as a template in C:\\ProgramData\\PortalVNC. Run provision-certs.ps1 (as admin) to generate agent.crt/key, devca.crt and client.crt/key here, then set allowedClients/access and (re)start the PortalVNC service. The service reads this config.json next to the exe.",
   "trayIcon": false,
   "listenAddress": "0.0.0.0",
   "port": 7654,
   "tls": {
-    "cert": "C:\\Program Files\\PortalVNC\\agent.crt",
-    "key": "C:\\Program Files\\PortalVNC\\agent.key",
-    "ca": "C:\\Program Files\\PortalVNC\\devca.crt"
+    "cert": "C:\\ProgramData\\PortalVNC\\agent.crt",
+    "key": "C:\\ProgramData\\PortalVNC\\agent.key",
+    "ca": "C:\\ProgramData\\PortalVNC\\devca.crt"
   },
   "allowedClients": [],
   "access": { "sids": [] },
-  "logFile": "C:\\Program Files\\PortalVNC\\pvnc-agent.log"
+  "logFile": "C:\\ProgramData\\PortalVNC\\pvnc-agent.log"
 }

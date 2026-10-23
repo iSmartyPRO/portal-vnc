@@ -8,7 +8,7 @@
 param(
   [string]$AgentExe = (Join-Path (Split-Path $PSScriptRoot -Parent) "build\agent\Release\pvnc-agent.exe"),
   [int]$Port = 7654,
-  [string]$Version = "0.1.2",
+  [string]$Version = "0.1.3",
   [string]$Out = (Join-Path $PSScriptRoot "PortalVNC.msi")
 )
 $ErrorActionPreference = "Stop"
@@ -16,10 +16,11 @@ if (-not (Test-Path $AgentExe)) { throw "Build the agent first: $AgentExe not fo
 
 Push-Location $PSScriptRoot
 try {
-  & wix build PortalVNC.wxs `
+  & wix build PortalVNC.wxs -arch x64 `
     -ext WixToolset.Firewall.wixext `
     -d "AgentExe=$AgentExe" `
     -d "ConfigSrc=config.install.json" `
+    -d "ProvisionSrc=provision-certs.ps1" `
     -d "Port=$Port" `
     -d "Ver=$Version" `
     -o $Out

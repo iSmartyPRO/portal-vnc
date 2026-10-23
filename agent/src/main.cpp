@@ -36,6 +36,17 @@ static int runAgent(const std::string& configPath, uint16_t portOverride) {
     std::fprintf(stderr, "config %s: tls.cert/key/ca are required\n", configPath.c_str());
     return 1;
   }
+  auto missing = [](const std::string& p) {
+    return GetFileAttributesA(p.c_str()) == INVALID_FILE_ATTRIBUTES;
+  };
+  if (missing(cfg.tlsCert) || missing(cfg.tlsKey) || missing(cfg.tlsCa)) {
+    std::fprintf(stderr,
+                 "certificates not found (tls.cert/key/ca in %s).\n"
+                 "Run provision-certs.ps1 (as admin) in the install folder to generate them,\n"
+                 "or provide your own, then (re)start the PortalVNC service.\n",
+                 configPath.c_str());
+    return 1;
+  }
 
   TrayIcon tray;
   if (cfg.trayIcon) tray.start();

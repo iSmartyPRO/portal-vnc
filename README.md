@@ -105,6 +105,19 @@ powershell -ExecutionPolicy Bypass -File installer\build-msi.ps1     # -> instal
 
 Prebuilt binaries and the MSI are attached to every [release](https://github.com/iSmartyPRO/portal-vnc/releases).
 
+The MSI installs to `C:\ProgramData\PortalVNC` (config, certificates and log live there).
+After installing, provision certificates and start the service:
+
+```powershell
+# in C:\ProgramData\PortalVNC, as administrator
+powershell -ExecutionPolicy Bypass -File provision-certs.ps1   # creates CA + agent + client certs
+# set "allowedClients" in config.json, then:
+Start-Service PortalVNC
+```
+
+Copy `client.crt` / `client.key` / `devca.crt` to the operator side (native viewer or portal
+gateway). For production, replace the generated certificates with ones from your own CA.
+
 ## Project layout
 
 | Directory | Purpose |

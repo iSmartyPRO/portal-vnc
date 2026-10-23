@@ -44,10 +44,11 @@ jobs:
         shell: pwsh
         run: |
           $ver = "${{ github.ref_name }}".TrimStart('v')
-          & "$env:USERPROFILE\.dotnet\tools\wix.exe" build installer/PortalVNC.wxs `
+          & "$env:USERPROFILE\.dotnet\tools\wix.exe" build installer/PortalVNC.wxs -arch x64 `
             -ext WixToolset.Firewall.wixext `
             -d "AgentExe=$PWD/build/agent/Release/pvnc-agent.exe" `
             -d "ConfigSrc=$PWD/installer/config.install.json" `
+            -d "ProvisionSrc=$PWD/installer/provision-certs.ps1" `
             -d "Port=7654" `
             -d "Ver=$ver" `
             -o "PortalVNC-$ver.msi"

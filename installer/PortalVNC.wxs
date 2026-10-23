@@ -27,7 +27,10 @@
     <MajorUpgrade DowngradeErrorMessage="A newer version of PortalVNC is already installed." />
     <MediaTemplate EmbedCab="yes" />
 
-    <StandardDirectory Id="ProgramFiles64Folder">
+    <!-- Install into C:\ProgramData\PortalVNC: machine-wide, bitness-neutral
+         (no Program Files x86/x64 ambiguity), and the right place for a
+         service's config, certificates and log. -->
+    <StandardDirectory Id="CommonAppDataFolder">
       <Directory Id="INSTALLFOLDER" Name="PortalVNC" />
     </StandardDirectory>
 
@@ -65,6 +68,11 @@
       <!-- Config template (does not overwrite an existing provisioned config). -->
       <Component Id="ConfigTemplate" Guid="*" NeverOverwrite="yes">
         <File Id="config_json" Source="$(var.ConfigSrc)" Name="config.json" KeyPath="yes" />
+      </Component>
+
+      <!-- Certificate provisioning helper (run once after install, or via GPO). -->
+      <Component Id="ProvisionScript" Guid="*">
+        <File Id="provision_ps1" Source="$(var.ProvisionSrc)" Name="provision-certs.ps1" KeyPath="yes" />
       </Component>
     </ComponentGroup>
 
