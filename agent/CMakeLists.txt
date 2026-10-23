@@ -26,6 +26,9 @@ add_executable(pvnc_agent
 )
 target_link_libraries(pvnc_agent PRIVATE pvnc_agent_core)
 set_target_properties(pvnc_agent PROPERTIES OUTPUT_NAME "pvnc-agent")
+target_compile_definitions(pvnc_agent PRIVATE
+  "PVNC_RC_VER=${PVNC_VERSION_COMMA}"
+  "PVNC_RC_STR=\"${PVNC_VERSION}\"")
 
 # ---- tests ----
 find_package(Catch2 3 CONFIG REQUIRED)
@@ -33,6 +36,7 @@ add_executable(pvnc_agent_tests
   test/test_config.cpp
   test/test_capture.cpp
   test/test_rfb_server.cpp
+  test/test_sysinfo.cpp
   test/test_integration.cpp
 )
 target_link_libraries(pvnc_agent_tests PRIVATE pvnc_agent_core Catch2::Catch2WithMain ws2_32)

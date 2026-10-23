@@ -179,6 +179,9 @@ std::string domainOrWorkgroup(bool& joined) {
 
 std::string collectSystemInfoJson() {
   json j;
+#ifdef PVNC_VERSION
+  j["agentVersion"] = PVNC_VERSION;
+#endif
   j["host"] = computerName(ComputerNameDnsHostname);
   bool joined = false;
   j["domain"] = domainOrWorkgroup(joined);
