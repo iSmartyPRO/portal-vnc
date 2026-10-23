@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 460" font-family="Segoe UI, system-ui, sans-serif">
+  <rect width="920" height="460" rx="16" fill="#0d1117"/>
+  <text x="460" y="42" text-anchor="middle" fill="#e6edf3" font-size="22" font-weight="700">PortalVNC — архитектура</text>
+  <text x="460" y="66" text-anchor="middle" fill="#8b949e" font-size="13">Защищённый удалённый доступ к Windows: mTLS + вход по SID</text>
+
+  <!-- Clients -->
+  <g>
+    <rect x="40" y="110" width="220" height="90" rx="12" fill="#161b22" stroke="#30363d"/>
+    <text x="150" y="140" text-anchor="middle" fill="#e6edf3" font-size="15" font-weight="600">Браузер (портал)</text>
+    <text x="150" y="162" text-anchor="middle" fill="#8b949e" font-size="12">noVNC в модуле</text>
+    <text x="150" y="179" text-anchor="middle" fill="#8b949e" font-size="12">Remote Control</text>
+  </g>
+  <g>
+    <rect x="40" y="250" width="220" height="90" rx="12" fill="#161b22" stroke="#30363d"/>
+    <text x="150" y="280" text-anchor="middle" fill="#e6edf3" font-size="15" font-weight="600">Просмотрщик</text>
+    <text x="150" y="302" text-anchor="middle" fill="#8b949e" font-size="12">нативный exe (Win32),</text>
+    <text x="150" y="319" text-anchor="middle" fill="#8b949e" font-size="12">только наш протокол</text>
+  </g>
+
+  <!-- Gateway -->
+  <g>
+    <rect x="340" y="110" width="200" height="90" rx="12" fill="#161b22" stroke="#1f6feb"/>
+    <text x="440" y="140" text-anchor="middle" fill="#e6edf3" font-size="15" font-weight="600">Шлюз (Node)</text>
+    <text x="440" y="162" text-anchor="middle" fill="#8b949e" font-size="12">WebSocket ↔ mTLS,</text>
+    <text x="440" y="179" text-anchor="middle" fill="#8b949e" font-size="12">релей RFB</text>
+  </g>
+
+  <!-- Agent -->
+  <g>
+    <rect x="650" y="150" width="230" height="210" rx="12" fill="#161b22" stroke="#238636"/>
+    <text x="765" y="182" text-anchor="middle" fill="#e6edf3" font-size="16" font-weight="700">Агент (служба)</text>
+    <text x="765" y="183" text-anchor="middle" fill="#e6edf3" font-size="16"> </text>
+    <line x1="672" y1="196" x2="858" y2="196" stroke="#30363d"/>
+    <text x="672" y="220" fill="#adbac7" font-size="12.5">• захват экрана (GDI)</text>
+    <text x="672" y="242" fill="#adbac7" font-size="12.5">• ввод (мышь/клавиатура)</text>
+    <text x="672" y="264" fill="#adbac7" font-size="12.5">• вход Windows + SID 544</text>
+    <text x="672" y="286" fill="#adbac7" font-size="12.5">• экран блокировки / UAC</text>
+    <text x="672" y="308" fill="#adbac7" font-size="12.5">• несколько сессий</text>
+    <text x="672" y="330" fill="#adbac7" font-size="12.5">• значок в трее (опц.)</text>
+  </g>
+
+  <!-- Arrows -->
+  <defs>
+    <marker id="a" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#6e7681"/></marker>
+    <marker id="b" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#6e7681"/></marker>
+  </defs>
+  <!-- browser -> gateway -->
+  <line x1="260" y1="155" x2="334" y2="155" stroke="#6e7681" stroke-width="2" marker-end="url(#a)"/>
+  <text x="297" y="146" text-anchor="middle" fill="#8b949e" font-size="11">wss</text>
+  <!-- gateway -> agent -->
+  <line x1="540" y1="165" x2="644" y2="210" stroke="#6e7681" stroke-width="2" marker-end="url(#a)"/>
+  <text x="596" y="178" text-anchor="middle" fill="#8b949e" font-size="11">mTLS</text>
+  <!-- viewer -> agent (direct) -->
+  <path d="M260 295 C 460 295, 470 300, 644 290" fill="none" stroke="#6e7681" stroke-width="2" marker-end="url(#b)"/>
+  <text x="450" y="320" text-anchor="middle" fill="#8b949e" font-size="11">mTLS + рукопожатие (минуя шлюз)</text>
+
+  <text x="460" y="420" text-anchor="middle" fill="#8b949e" font-size="12">Порт 7654 · взаимная проверка сертификатов · посторонний VNC-клиент не подключится</text>
+</svg>
