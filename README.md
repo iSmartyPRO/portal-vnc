@@ -91,8 +91,11 @@ powershell -ExecutionPolicy Bypass -File tools\make-dev-certs.ps1
 powershell -ExecutionPolicy Bypass -File tools\run-local-slice.ps1
 ```
 
-`run-local-slice.ps1` starts the agent on `127.0.0.1:7654` and prints the viewer command
-(it will prompt for a Windows password). For the browser path, start the agent, then run
+`run-local-slice.ps1` starts the agent on `127.0.0.1:7654` and prints the viewer command.
+The native viewer is a GUI app: run `pvnc-viewer.exe` with no arguments (or double-click it) to
+open a **connect dialog** (host, user, password — certificates default to the folder next to the
+exe), or pass `--host/--ca/--cert/--key/--user [--password]` to connect directly. For the browser
+path, start the agent, then run
 `node gateway\server.js` with a config and open `http://localhost:8787/` — see
 [gateway/README.md](gateway/README.md).
 
