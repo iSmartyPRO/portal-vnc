@@ -71,19 +71,100 @@ RefuseCode RfbClient::connect() {
   return RefuseCode::None;
 }
 
+namespace {
+std::string wToUtf8(const std::wstring& w) {
+  if (w.empty()) return {};
+  int n = WideCharToMultiByte(CP_UTF8, 0, w.data(), (int)w.size(), nullptr, 0, nullptr, nullptr);
+  std::string s(n, '\0');
+  WideCharToMultiByte(CP_UTF8, 0, w.data(), (int)w.size(), s.data(), n, nullptr, nullptr);
+  return s;
+}
+bool writePath(TlsConn& c, const std::wstring& path) {
+  std::string u = wToUtf8(path);
+  if (u.size() > 0xFFFF) return false;
+  uint8_t len[2] = {uint8_t(u.size() >> 8), uint8_t(u.size() & 0xFF)};
+  if (!c.writeFull(len, 2)) return false;
+  return u.empty() ? true : c.writeFull(u.data(), u.size());
+}
+bool readGeneric(TlsConn& c, uint8_t& status, std::string& payload) {
+  uint8_t hdr[5];
+  if (!c.readFull(hdr, 5)) return false;
+  status = hdr[0];
+  uint32_t len = (uint32_t(hdr[1]) << 24) | (hdr[2] << 16) | (hdr[3] << 8) | hdr[4];
+  payload.assign(len, '\0');
+  return len ? c.readFull(payload.data(), len) : true;
+}
+}  // namespace
+
 bool RfbClient::fetchSystemInfo(std::string& jsonOut) {
   TlsConn c;
   if (dialAndAuth(c, SessionMode::Control) != RefuseCode::None) return false;
   uint8_t op = ctl::kSysInfo;
   if (!c.writeFull(&op, 1)) return false;
-  uint8_t hdr[5];
-  if (!c.readFull(hdr, 5)) return false;
-  if (hdr[0] != ctl::kOk) return false;
-  uint32_t len = (uint32_t(hdr[1]) << 24) | (hdr[2] << 16) | (hdr[3] << 8) | hdr[4];
-  std::string payload(len, '\0');
-  if (len && !c.readFull(payload.data(), len)) return false;
-  jsonOut = std::move(payload);
+  uint8_t status = 0;
+  if (!readGeneric(c, status, jsonOut) || status != ctl::kOk) return false;
   return true;
+}
+
+bool RfbClient::fileList(const std::wstring& path, std::string& jsonOut) {
+  TlsConn c;
+  if (dialAndAuth(c, SessionMode::Control) != RefuseCode::None) return false;
+  uint8_t op = ctl::kFileList;
+  if (!c.writeFull(&op, 1) || !writePath(c, path)) return false;
+  uint8_t status = 0;
+  return readGeneric(c, status, jsonOut) && status == ctl::kOk;
+}
+
+bool RfbClient::fileDownload(const std::wstring& remotePath, const std::wstring& localPath) {
+  TlsConn c;
+  if (dialAndAuth(c, SessionMode::Control) != RefuseCode::None) return false;
+  uint8_t op = ctl::kFileGet;
+  if (!c.writeFull(&op, 1) || !writePath(c, remotePath)) return false;
+  uint8_t status = 0;
+  if (!c.readFull(&status, 1) || status != ctl::kOk) return false;
+  uint8_t szb[8];
+  if (!c.readFull(szb, 8)) return false;
+  uint64_t size = 0; for (int i = 0; i < 8; ++i) size = (size << 8) | szb[i];
+  HANDLE f = CreateFileW(localPath.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS,
+                         FILE_ATTRIBUTE_NORMAL, nullptr);
+  if (f == INVALID_HANDLE_VALUE) return false;
+  std::vector<uint8_t> buf(64 * 1024);
+  uint64_t rem = size; bool ok = true;
+  while (rem > 0) {
+    size_t want = (size_t)(rem < buf.size() ? rem : buf.size());
+    if (!c.readFull(buf.data(), want)) { ok = false; break; }
+    DWORD wrote = 0;
+    if (!WriteFile(f, buf.data(), (DWORD)want, &wrote, nullptr) || wrote != want) { ok = false; break; }
+    rem -= want;
+  }
+  CloseHandle(f);
+  return ok;
+}
+
+bool RfbClient::fileUpload(const std::wstring& localPath, const std::wstring& remotePath) {
+  HANDLE f = CreateFileW(localPath.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
+                         FILE_ATTRIBUTE_NORMAL, nullptr);
+  if (f == INVALID_HANDLE_VALUE) return false;
+  LARGE_INTEGER sz{}; GetFileSizeEx(f, &sz);
+  TlsConn c;
+  if (dialAndAuth(c, SessionMode::Control) != RefuseCode::None) { CloseHandle(f); return false; }
+  uint8_t op = ctl::kFilePut;
+  if (!c.writeFull(&op, 1) || !writePath(c, remotePath)) { CloseHandle(f); return false; }
+  uint8_t szb[8]; uint64_t size = (uint64_t)sz.QuadPart;
+  for (int i = 0; i < 8; ++i) szb[i] = uint8_t(size >> ((7 - i) * 8));
+  if (!c.writeFull(szb, 8)) { CloseHandle(f); return false; }
+  std::vector<uint8_t> buf(64 * 1024);
+  uint64_t rem = size; bool ok = true;
+  while (rem > 0) {
+    DWORD want = (DWORD)(rem < buf.size() ? rem : buf.size()), got = 0;
+    if (!ReadFile(f, buf.data(), want, &got, nullptr) || got == 0) { ok = false; break; }
+    if (!c.writeFull(buf.data(), got)) { ok = false; break; }
+    rem -= got;
+  }
+  CloseHandle(f);
+  if (!ok) return false;
+  uint8_t status = 0; std::string resp;
+  return readGeneric(c, status, resp) && status == ctl::kOk;
 }
 
 bool RfbClient::rfbHandshake() {

@@ -4,6 +4,7 @@
 
 #include <string>
 
+#include "files_dialog.h"
 #include "resource.h"
 #include "sysinfo_dialog.h"
 
@@ -79,12 +80,12 @@ bool ViewerWindow::create(const wchar_t* title) {
 void ViewerWindow::createToolbar(HWND h) {
   HINSTANCE inst = GetModuleHandleW(nullptr);
   struct { int id; const wchar_t* text; } btns[] = {
-      {ID_INFO, L"Computer info"}, {ID_CAD, L"Ctrl+Alt+Del"},
+      {ID_INFO, L"Computer info"}, {ID_FILES, L"Files"}, {ID_CAD, L"Ctrl+Alt+Del"},
       {ID_REFRESH, L"Refresh"}, {ID_FULLSCREEN, L"Fullscreen"},
   };
   int x = 6;
   for (auto& b : btns) {
-    int w = (b.id == ID_CAD) ? 96 : (b.id == ID_INFO ? 100 : 82);
+    int w = (b.id == ID_CAD) ? 96 : (b.id == ID_INFO ? 100 : (b.id == ID_FILES ? 60 : 82));
     HWND btn = CreateWindowExW(0, L"BUTTON", b.text, WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
                                x, 5, w, 26, h, reinterpret_cast<HMENU>(static_cast<INT_PTR>(b.id)),
                                inst, nullptr);
@@ -256,6 +257,7 @@ void ViewerWindow::onCommand(HWND h, int id) {
       else MessageBoxW(h, L"Could not retrieve system information.", L"PortalVNC", MB_ICONWARNING);
       break;
     }
+    case ID_FILES: showFiles(h, client_); break;
     case ID_CAD: sendCtrlAltDel(); break;
     case ID_REFRESH: client_.requestRefresh(); break;
     case ID_FULLSCREEN: toggleFullscreen(h); break;

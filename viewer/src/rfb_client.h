@@ -52,6 +52,12 @@ class RfbClient {
   // information as a JSON string. Blocking; safe to call from the UI thread.
   bool fetchSystemInfo(std::string& jsonOut);
 
+  // File transfer over a control connection (blocking; UI-thread safe).
+  // path empty on fileList lists the drives.
+  bool fileList(const std::wstring& path, std::string& jsonOut);
+  bool fileDownload(const std::wstring& remotePath, const std::wstring& localPath);
+  bool fileUpload(const std::wstring& localPath, const std::wstring& remotePath);
+
   // Request a full (non-incremental) framebuffer update on the next loop.
   void requestRefresh() { fullRefresh_.store(true); }
 
