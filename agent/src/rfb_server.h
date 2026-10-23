@@ -5,6 +5,7 @@
 #include "capture_hub.h"
 #include "config.h"
 #include "pvnc/tls.h"
+#include "sessions.h"
 
 namespace pvnc {
 
@@ -42,6 +43,7 @@ class RfbServer {
  private:
   AgentConfig cfg_;
   CaptureHub hub_;
+  SessionRegistry sessions_;  // active operator connections, surfaced via status-<port>.json
   std::atomic<bool> running_{false};
   // Owns the TLS server context for the lifetime of the server object so that
   // detached per-client threads never reference a destroyed stack local.

@@ -9,9 +9,11 @@
 #include <vector>
 
 #include "control_server.h"
+#include "paths.h"
 #include "pvnc/auth.h"
 #include "pvnc/handshake.h"
 #include "pvnc/rfb.h"
+#include "status_writer.h"
 
 #pragma comment(lib, "ws2_32.lib")
 
@@ -231,6 +233,10 @@ int RfbServer::run() {
   hub_.start();
   running_.store(true);
 
+  // Publish this worker's live status for the local admin tool to read.
+  StatusWriter status(sessions_, cfg_.port, exeDirW());
+  status.start();
+
   while (running_.load()) {
     sockaddr_in peer{};
     int plen = sizeof(peer);
@@ -244,7 +250,8 @@ int RfbServer::run() {
       continue;
     }
 
-    std::thread([this, raw] {
+    std::string peerIp = ip;
+    std::thread([this, raw, peerIp] {
       TlsConn conn;
       try {
         conn = tls_->accept(raw);  // closes `raw` itself on failure
@@ -262,6 +269,9 @@ int RfbServer::run() {
       }
       AccessPolicy policy{cfg_.accessSids, cfg_.accessUsers, cfg_.accessGroups};
       AuthOutcome outcome = authenticate(hs.creds, policy);
+      // Keep the authenticated identity for the status file before wiping secrets.
+      std::wstring who = hs.creds.domain.empty() ? hs.creds.user
+                                                 : hs.creds.domain + L"\\" + hs.creds.user;
       hs.creds.wipe();
       sendAuthResult(conn, toRefuse(outcome));
       if (outcome != AuthOutcome::Ok) return;
@@ -269,6 +279,12 @@ int RfbServer::run() {
       // control channel (system info / file transfer).
       auto mode = readSessionMode(conn);
       if (!mode) return;
+      const char* modeStr = (*mode == SessionMode::Control) ? "control" : "screen";
+      uint64_t sid = sessions_.add({who, peerIp, modeStr, nowUnix()});
+      struct Unreg {
+        SessionRegistry& r; uint64_t id;
+        ~Unreg() { r.remove(id); }
+      } unreg{sessions_, sid};
       if (*mode == SessionMode::Control) serveControl(conn);
       else serveClient(conn);
     }).detach();

@@ -11,6 +11,8 @@ add_library(pvnc_agent_core STATIC
   src/control_server.cpp
   src/sysinfo.cpp
   src/service.cpp
+  src/sessions.cpp
+  src/status_writer.cpp
   src/tray.cpp
 )
 target_include_directories(pvnc_agent_core PUBLIC src)
@@ -38,6 +40,7 @@ add_executable(pvnc_agent_tests
   test/test_rfb_server.cpp
   test/test_sysinfo.cpp
   test/test_service.cpp
+  test/test_sessions.cpp
   test/test_integration.cpp
 )
 target_link_libraries(pvnc_agent_tests PRIVATE pvnc_agent_core Catch2::Catch2WithMain ws2_32)
