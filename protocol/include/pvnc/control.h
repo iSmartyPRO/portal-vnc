@@ -17,6 +17,7 @@ enum Opcode : uint8_t {
   kFileList = 2,   // payload: u16 path-len + UTF-8 path -> JSON directory listing
   kFileGet = 3,    // payload: u16 path-len + UTF-8 path -> raw file bytes
   kFilePut = 4,    // payload: u16 path-len + path + u64 size + bytes -> JSON {ok}
+  kMkDir = 5,      // payload: u16 path-len + UTF-8 path -> JSON {ok} (creates parents)
 };
 
 enum Status : uint8_t {

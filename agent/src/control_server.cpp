@@ -1,6 +1,7 @@
 #include "control_server.h"
 
 #include <windows.h>
+#include <shlobj.h>
 
 #include <cstdint>
 #include <string>
@@ -186,6 +187,15 @@ void serveControl(TlsConn& conn) {
         std::wstring path;
         if (!readPath(conn, path)) return;
         if (!handlePut(conn, path)) return;
+        break;
+      }
+      case ctl::kMkDir: {
+        std::wstring path;
+        if (!readPath(conn, path)) return;
+        int rc = SHCreateDirectoryExW(nullptr, path.c_str(), nullptr);
+        bool ok = (rc == ERROR_SUCCESS || rc == ERROR_ALREADY_EXISTS || rc == ERROR_FILE_EXISTS);
+        if (!sendResponse(conn, ok ? ctl::kOk : ctl::kDenied,
+                          json{{"ok", ok}}.dump())) return;
         break;
       }
       default:

@@ -141,6 +141,15 @@ bool RfbClient::fileDownload(const std::wstring& remotePath, const std::wstring&
   return ok;
 }
 
+bool RfbClient::fileMkdir(const std::wstring& remotePath) {
+  TlsConn c;
+  if (dialAndAuth(c, SessionMode::Control) != RefuseCode::None) return false;
+  uint8_t op = ctl::kMkDir;
+  if (!c.writeFull(&op, 1) || !writePath(c, remotePath)) return false;
+  uint8_t status = 0; std::string resp;
+  return readGeneric(c, status, resp) && status == ctl::kOk;
+}
+
 bool RfbClient::fileUpload(const std::wstring& localPath, const std::wstring& remotePath) {
   HANDLE f = CreateFileW(localPath.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
                          FILE_ATTRIBUTE_NORMAL, nullptr);

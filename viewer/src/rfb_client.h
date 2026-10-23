@@ -57,6 +57,7 @@ class RfbClient {
   bool fileList(const std::wstring& path, std::string& jsonOut);
   bool fileDownload(const std::wstring& remotePath, const std::wstring& localPath);
   bool fileUpload(const std::wstring& localPath, const std::wstring& remotePath);
+  bool fileMkdir(const std::wstring& remotePath);
 
   // Request a full (non-incremental) framebuffer update on the next loop.
   void requestRefresh() { fullRefresh_.store(true); }
