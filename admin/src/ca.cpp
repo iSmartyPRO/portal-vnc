@@ -1,8 +1,13 @@
 #include "ca.h"
 
+// Read the CSR signature fields (sig/sig_md/cri) to verify proof of possession;
+// mbedTLS 3.x marks them private and gates access behind this macro.
+#define MBEDTLS_ALLOW_PRIVATE_ACCESS
+
 #include <mbedtls/ctr_drbg.h>
 #include <mbedtls/entropy.h>
 #include <mbedtls/error.h>
+#include <mbedtls/md.h>
 #include <mbedtls/oid.h>
 #include <mbedtls/pk.h>
 #include <mbedtls/rsa.h>
@@ -218,6 +223,18 @@ std::string issueCert(const std::string& caCertPem, const std::string& caKeyPem,
       check("csr_parse",
             mbedtls_x509_csr_parse(&csr, (const unsigned char*)subjectKeyOrCsrPem.data(),
                                    subjectKeyOrCsrPem.size() + 1));
+      // Proof of possession: verify the CSR's self-signature over its CRI before
+      // issuing, so we never sign a request whose key the requester lacks.
+      {
+        const mbedtls_md_info_t* md = mbedtls_md_info_from_type(csr.sig_md);
+        if (!md) throw CaError("CSR uses an unsupported digest");
+        unsigned char hash[MBEDTLS_MD_MAX_SIZE];
+        if (mbedtls_md(md, csr.cri.p, csr.cri.len, hash) != 0)
+          throw CaError("CSR digest failed");
+        if (mbedtls_pk_verify(&csr.pk, csr.sig_md, hash, mbedtls_md_get_size(md), csr.sig.p,
+                              csr.sig.len) != 0)
+          throw CaError("CSR signature verification failed");
+      }
       subjectPk = &csr.pk;
       if (subjectCn.empty()) {
         char sn[512];

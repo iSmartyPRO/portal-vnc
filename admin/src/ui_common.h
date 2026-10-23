@@ -53,6 +53,10 @@ int lvAddRow(HWND lv, const std::wstring& col0, const std::vector<std::wstring>&
 
 std::wstring getWindowText(HWND w);
 
+// Standard message boxes with the app title.
+void info(HWND owner, const std::wstring& msg);
+void warn(HWND owner, const std::wstring& msg);
+
 // --- Modal prompts (return false on Cancel) ---
 struct Field {
   std::wstring label;

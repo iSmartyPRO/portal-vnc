@@ -1,7 +1,6 @@
 #include "ui_agent.h"
 
 #include <commctrl.h>
-#include <ws2tcpip.h>
 
 #include <ctime>
 #include <string>
@@ -10,8 +9,6 @@
 #include "picker.h"
 #include "service.h"
 #include "ui_common.h"
-
-#pragma comment(lib, "ws2_32.lib")
 
 namespace pvnc {
 
@@ -37,9 +34,6 @@ enum : int {
   IDC_AG_TRAY = 4203,
 };
 
-void info(HWND h, const std::wstring& m) { MessageBoxW(h, m.c_str(), L"PortalVNC Manager", MB_ICONINFORMATION); }
-void warn(HWND h, const std::wstring& m) { MessageBoxW(h, m.c_str(), L"PortalVNC Manager", MB_ICONWARNING); }
-
 const wchar_t* stateName(SvcState s) {
   switch (s) {
     case SvcState::NotInstalled: return L"not installed";
@@ -61,16 +55,42 @@ std::wstring fmtTime(uint64_t unix) {
   return b;
 }
 
+// A dotted IPv4: exactly four decimal octets 0..255. Self-contained (no Winsock).
+bool isDottedIpv4(const std::string& s) {
+  int octets = 0;
+  size_t i = 0;
+  while (i < s.size()) {
+    size_t start = i;
+    int val = 0;
+    while (i < s.size() && s[i] >= '0' && s[i] <= '9') {
+      val = val * 10 + (s[i] - '0');
+      if (val > 255) return false;
+      ++i;
+    }
+    if (i == start) return false;             // empty octet
+    if (i - start > 3) return false;          // too many digits
+    ++octets;
+    if (octets > 4) return false;
+    if (i < s.size()) {
+      if (s[i] != '.') return false;
+      ++i;
+      if (i == s.size()) return false;        // trailing dot
+    }
+  }
+  return octets == 4;
+}
+
 // Accepts a bare IPv4 or an a.b.c.d/n (0..32) range.
 bool validIpv4OrCidr(const std::wstring& w) {
   std::string s = wToUtf8(w);
   auto slash = s.find('/');
   std::string base = (slash == std::string::npos) ? s : s.substr(0, slash);
-  in_addr a{};
-  if (InetPtonA(AF_INET, base.c_str(), &a) != 1) return false;
+  if (!isDottedIpv4(base)) return false;
   if (slash != std::string::npos) {
     try {
-      int bits = std::stoi(s.substr(slash + 1));
+      size_t pos = 0;
+      int bits = std::stoi(s.substr(slash + 1), &pos);
+      if (pos != s.size() - slash - 1) return false;  // trailing junk after the number
       if (bits < 0 || bits > 32) return false;
     } catch (...) {
       return false;

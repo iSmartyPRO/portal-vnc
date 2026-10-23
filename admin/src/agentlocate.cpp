@@ -11,20 +11,14 @@
 
 #include <nlohmann/json.hpp>
 
+#include "fileio.h"  // utf8ToW
+
 #pragma comment(lib, "advapi32.lib")
 #pragma comment(lib, "version.lib")
 
 namespace pvnc {
 
 namespace {
-
-std::wstring utf8ToW(const std::string& s) {
-  if (s.empty()) return {};
-  int n = MultiByteToWideChar(CP_UTF8, 0, s.data(), (int)s.size(), nullptr, 0);
-  std::wstring w(n, L'\0');
-  MultiByteToWideChar(CP_UTF8, 0, s.data(), (int)s.size(), w.data(), n);
-  return w;
-}
 
 // Extracts the executable path from an SCM ImagePath (may be quoted and may
 // carry trailing arguments, e.g. `"C:\...\pvnc-agent.exe" --service`).

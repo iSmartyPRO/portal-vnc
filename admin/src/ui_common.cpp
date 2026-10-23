@@ -179,6 +179,13 @@ std::wstring getWindowText(HWND w) {
   return s;
 }
 
+void info(HWND owner, const std::wstring& msg) {
+  MessageBoxW(owner, msg.c_str(), L"PortalVNC Manager", MB_ICONINFORMATION);
+}
+void warn(HWND owner, const std::wstring& msg) {
+  MessageBoxW(owner, msg.c_str(), L"PortalVNC Manager", MB_ICONWARNING);
+}
+
 // ---------------- prompt dialog ----------------
 namespace {
 struct PromptState {

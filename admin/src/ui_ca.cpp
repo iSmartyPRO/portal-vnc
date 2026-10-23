@@ -28,9 +28,6 @@ std::wstring computerName() {
   if (GetComputerNameW(buf, &n)) return std::wstring(buf, n);
   return L"agent-01";
 }
-
-void info(HWND h, const std::wstring& m) { MessageBoxW(h, m.c_str(), L"PortalVNC Manager", MB_ICONINFORMATION); }
-void warn(HWND h, const std::wstring& m) { MessageBoxW(h, m.c_str(), L"PortalVNC Manager", MB_ICONWARNING); }
 }  // namespace
 
 void CaPanel::commandThunk(void* owner, int id) {
