@@ -8,6 +8,7 @@
 param(
   [string]$AgentExe = (Join-Path (Split-Path $PSScriptRoot -Parent) "build\agent\Release\pvnc-agent.exe"),
   [int]$Port = 7654,
+  [string]$Version = "0.1.1",
   [string]$Out = (Join-Path $PSScriptRoot "PortalVNC.msi")
 )
 $ErrorActionPreference = "Stop"
@@ -20,6 +21,7 @@ try {
     -d "AgentExe=$AgentExe" `
     -d "ConfigSrc=config.install.json" `
     -d "Port=$Port" `
+    -d "Ver=$Version" `
     -o $Out
   if ($LASTEXITCODE -ne 0) { throw "wix build failed ($LASTEXITCODE)" }
   Write-Host "Built: $Out"

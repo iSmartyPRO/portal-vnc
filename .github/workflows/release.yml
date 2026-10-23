@@ -47,6 +47,7 @@ jobs:
             -d "AgentExe=$PWD/build/agent/Release/pvnc-agent.exe" `
             -d "ConfigSrc=$PWD/installer/config.install.json" `
             -d "Port=7654" `
+            -d "Ver=$ver" `
             -o "PortalVNC-$ver.msi"
 
       - name: Package portable zip
