@@ -144,6 +144,7 @@ TlsConn TlsContext::handshake(SOCKET raw, bool isServer) {
   int rc = mbedtls_ssl_setup(ssl.get(), &d_->conf);
   if (rc != 0) {
     mbedtls_ssl_free(ssl.get());
+    ::closesocket(raw);  // own the socket on failure so callers never leak it
     throw TlsError(mbedErr("ssl_setup", rc));
   }
   // We authenticate the peer by CA trust (and read its CN ourselves), not by
@@ -163,6 +164,7 @@ TlsConn TlsContext::handshake(SOCKET raw, bool isServer) {
     }
     if (rc != MBEDTLS_ERR_SSL_WANT_READ && rc != MBEDTLS_ERR_SSL_WANT_WRITE) {
       mbedtls_ssl_free(ssl.get());
+      ::closesocket(raw);
       throw TlsError(mbedErr("handshake", rc));
     }
   }
@@ -172,6 +174,7 @@ TlsConn TlsContext::handshake(SOCKET raw, bool isServer) {
   uint32_t flags = mbedtls_ssl_get_verify_result(ssl.get());
   if (flags != 0) {
     mbedtls_ssl_free(ssl.get());
+    ::closesocket(raw);
     throw TlsError("peer certificate verification failed");
   }
 

@@ -57,9 +57,29 @@ wss.on('connection', async (ws, req) => {
 
   // Relay: browser WS (binary RFB) <-> agent TLS (raw RFB).
   ws.on('message', (data) => { if (agent.writable) agent.write(data); });
-  agent.on('data', (chunk) => { if (ws.readyState === ws.OPEN) ws.send(chunk); });
 
-  const shutdown = () => { try { agent.destroy(); } catch (_) {} try { ws.close(); } catch (_) {} };
+  // Backpressure: if the browser can't keep up, pause reading from the agent
+  // so a fast desktop over a slow link doesn't grow the send buffer unbounded.
+  const HIGH = 8 * 1024 * 1024, LOW = 1 * 1024 * 1024;
+  let drainTimer = null;
+  agent.on('data', (chunk) => {
+    if (ws.readyState !== ws.OPEN) return;
+    ws.send(chunk);
+    if (ws.bufferedAmount > HIGH && !drainTimer) {
+      agent.pause();
+      drainTimer = setInterval(() => {
+        if (ws.readyState !== ws.OPEN || ws.bufferedAmount < LOW) {
+          clearInterval(drainTimer); drainTimer = null; agent.resume();
+        }
+      }, 50);
+    }
+  });
+
+  const shutdown = () => {
+    if (drainTimer) { clearInterval(drainTimer); drainTimer = null; }
+    try { agent.destroy(); } catch (_) {}
+    try { ws.close(); } catch (_) {}
+  };
   ws.on('close', shutdown);
   ws.on('error', shutdown);
   agent.on('close', shutdown);

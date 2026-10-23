@@ -246,9 +246,8 @@ int RfbServer::run() {
     std::thread([this, raw] {
       TlsConn conn;
       try {
-        conn = tls_->accept(raw);
+        conn = tls_->accept(raw);  // closes `raw` itself on failure
       } catch (...) {
-        closesocket(raw);
         return;  // bad/missing client cert: TLS rejected
       }
       // Bound every read from here on: a client that passes TLS but then stalls
