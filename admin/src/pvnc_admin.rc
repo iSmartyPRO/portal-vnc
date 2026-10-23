@@ -1,0 +1,39 @@
+#include "resource.h"
+#include <winver.h>
+
+IDI_APPICON ICON "../../assets/pvnc-admin.ico"
+
+#ifndef PVNC_RC_VER
+#define PVNC_RC_VER 0,0,0,0
+#endif
+#ifndef PVNC_RC_STR
+#define PVNC_RC_STR "0.0.0"
+#endif
+
+1 VERSIONINFO
+ FILEVERSION PVNC_RC_VER
+ PRODUCTVERSION PVNC_RC_VER
+ FILEFLAGSMASK 0x3fL
+ FILEFLAGS 0x0L
+ FILEOS VOS_NT_WINDOWS32
+ FILETYPE VFT_APP
+ FILESUBTYPE VFT2_UNKNOWN
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "040904b0"
+    BEGIN
+      VALUE "CompanyName", "PortalVNC"
+      VALUE "FileDescription", "PortalVNC Agent Manager"
+      VALUE "FileVersion", PVNC_RC_STR
+      VALUE "InternalName", "pvnc-admin"
+      VALUE "OriginalFilename", "pvnc-admin.exe"
+      VALUE "ProductName", "PortalVNC"
+      VALUE "ProductVersion", PVNC_RC_STR
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x409, 1200
+  END
+END
