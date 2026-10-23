@@ -188,11 +188,11 @@ void WINAPI serviceMain(DWORD, LPWSTR*) {
 
 }  // namespace
 
-int installService() {
+int installServiceAt(const std::wstring& exePath, const std::wstring& args) {
   SC_HANDLE scm = OpenSCManagerW(nullptr, nullptr, SC_MANAGER_CREATE_SERVICE);
-  if (!scm) { std::fprintf(stderr, "OpenSCManager failed (%lu). Run as admin.\n", GetLastError()); return 1; }
-
-  std::wstring bin = L"\"" + exePathW() + L"\" --service";
+  if (!scm) return 1;
+  std::wstring bin = L"\"" + exePath + L"\"";
+  if (!args.empty()) bin += L" " + args;
   SC_HANDLE svc = CreateServiceW(
       scm, kServiceName, kServiceDisplay, SERVICE_ALL_ACCESS, SERVICE_WIN32_OWN_PROCESS,
       SERVICE_AUTO_START, SERVICE_ERROR_NORMAL, bin.c_str(), nullptr, nullptr, nullptr,
@@ -200,16 +200,86 @@ int installService() {
   if (!svc) {
     DWORD e = GetLastError();
     CloseServiceHandle(scm);
-    if (e == ERROR_SERVICE_EXISTS) { std::fprintf(stderr, "Service already installed.\n"); return 0; }
-    std::fprintf(stderr, "CreateService failed (%lu).\n", e);
-    return 1;
+    return (e == ERROR_SERVICE_EXISTS) ? 0 : 1;
   }
   SERVICE_DESCRIPTIONW desc{const_cast<wchar_t*>(L"PortalVNC secure remote access agent.")};
   ChangeServiceConfig2W(svc, SERVICE_CONFIG_DESCRIPTION, &desc);
-  std::printf("Service '%ls' installed. Start with: sc start %ls\n", kServiceName, kServiceName);
   CloseServiceHandle(svc);
   CloseServiceHandle(scm);
   return 0;
+}
+
+int installService() {
+  int rc = installServiceAt(exePathW(), L"--service");
+  if (rc == 0) std::printf("Service '%ls' installed. Start with: sc start %ls\n", kServiceName, kServiceName);
+  else std::fprintf(stderr, "CreateService failed (run as admin).\n");
+  return rc;
+}
+
+SvcState queryService(const std::wstring& name) {
+  SC_HANDLE scm = OpenSCManagerW(nullptr, nullptr, SC_MANAGER_CONNECT);
+  if (!scm) return SvcState::NotInstalled;
+  SC_HANDLE svc = OpenServiceW(scm, name.c_str(), SERVICE_QUERY_STATUS);
+  if (!svc) { CloseServiceHandle(scm); return SvcState::NotInstalled; }
+  SERVICE_STATUS st{};
+  SvcState out = SvcState::Other;
+  if (QueryServiceStatus(svc, &st)) {
+    switch (st.dwCurrentState) {
+      case SERVICE_RUNNING: out = SvcState::Running; break;
+      case SERVICE_STOPPED: out = SvcState::Stopped; break;
+      case SERVICE_START_PENDING: out = SvcState::StartPending; break;
+      case SERVICE_STOP_PENDING: out = SvcState::StopPending; break;
+      default: out = SvcState::Other; break;
+    }
+  }
+  CloseServiceHandle(svc);
+  CloseServiceHandle(scm);
+  return out;
+}
+
+static bool waitState(SC_HANDLE svc, DWORD want, DWORD timeoutMs) {
+  SERVICE_STATUS st{};
+  DWORD waited = 0;
+  while (QueryServiceStatus(svc, &st)) {
+    if (st.dwCurrentState == want) return true;
+    if (waited >= timeoutMs) return false;
+    Sleep(200); waited += 200;
+  }
+  return false;
+}
+
+bool startService(const std::wstring& name) {
+  SC_HANDLE scm = OpenSCManagerW(nullptr, nullptr, SC_MANAGER_CONNECT);
+  if (!scm) return false;
+  SC_HANDLE svc = OpenServiceW(scm, name.c_str(), SERVICE_START | SERVICE_QUERY_STATUS);
+  bool ok = false;
+  if (svc) {
+    if (StartServiceW(svc, 0, nullptr) || GetLastError() == ERROR_SERVICE_ALREADY_RUNNING)
+      ok = waitState(svc, SERVICE_RUNNING, 15000);
+    CloseServiceHandle(svc);
+  }
+  CloseServiceHandle(scm);
+  return ok;
+}
+
+bool stopService(const std::wstring& name) {
+  SC_HANDLE scm = OpenSCManagerW(nullptr, nullptr, SC_MANAGER_CONNECT);
+  if (!scm) return false;
+  SC_HANDLE svc = OpenServiceW(scm, name.c_str(), SERVICE_STOP | SERVICE_QUERY_STATUS);
+  bool ok = false;
+  if (svc) {
+    SERVICE_STATUS st{};
+    if (ControlService(svc, SERVICE_CONTROL_STOP, &st) || GetLastError() == ERROR_SERVICE_NOT_ACTIVE)
+      ok = waitState(svc, SERVICE_STOPPED, 15000);
+    CloseServiceHandle(svc);
+  }
+  CloseServiceHandle(scm);
+  return ok;
+}
+
+bool restartService(const std::wstring& name) {
+  stopService(name);
+  return startService(name);
 }
 
 int uninstallService() {
