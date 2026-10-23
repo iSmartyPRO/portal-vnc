@@ -6,14 +6,14 @@
 
 namespace pvnc {
 
-// --- Premium dark palette (matches the viewer) ---
+// --- Premium light palette (Windows 11 style) ---
 namespace theme {
-constexpr COLORREF kWindow = RGB(0x1E, 0x1E, 0x1E);
-constexpr COLORREF kPanel = RGB(0x25, 0x25, 0x26);
-constexpr COLORREF kEdit = RGB(0x2D, 0x2D, 0x30);
-constexpr COLORREF kText = RGB(0xE6, 0xE6, 0xE6);
-constexpr COLORREF kMuted = RGB(0x9A, 0x9A, 0x9E);
-constexpr COLORREF kAccent = RGB(0x3B, 0x82, 0xF6);
+constexpr COLORREF kWindow = RGB(0xF3, 0xF3, 0xF3);  // page background
+constexpr COLORREF kPanel = RGB(0xF3, 0xF3, 0xF3);   // same as page (uniform)
+constexpr COLORREF kEdit = RGB(0xFF, 0xFF, 0xFF);    // input / list background
+constexpr COLORREF kText = RGB(0x1A, 0x1A, 0x1A);    // primary text
+constexpr COLORREF kMuted = RGB(0x60, 0x60, 0x60);   // secondary text
+constexpr COLORREF kAccent = RGB(0x00, 0x67, 0xC0);  // Windows 11 accent
 }  // namespace theme
 
 // Shared cached brushes.
@@ -21,15 +21,14 @@ HBRUSH windowBrush();
 HBRUSH panelBrush();
 HBRUSH editBrush();
 
-// Turns on the immersive dark title bar for `hwnd` (no-op on older Windows).
-void enableDarkTitleBar(HWND hwnd);
+// The native UI font (Segoe UI from the system message font), cached.
+HFONT uiFont();
 
-// Centralized WM_CTLCOLOR* handler for dark controls. Returns a brush (as
-// LRESULT) when `msg` is a CTLCOLOR message it handles, or 0 otherwise; set
-// `handled` accordingly.
-LRESULT darkCtlColor(UINT msg, WPARAM wParam, bool& handled);
+// Centralized WM_CTLCOLOR* handler. Returns a brush (as LRESULT) when `msg` is a
+// CTLCOLOR message it handles, or 0 otherwise; set `handled` accordingly.
+LRESULT themedCtlColor(UINT msg, WPARAM wParam, bool& handled);
 
-// Applies the default GUI font to every child of `parent`.
+// Applies the UI font to every child of `parent`.
 void applyGuiFont(HWND parent);
 
 // Creates a themed child "panel" window that routes its children's WM_COMMAND

@@ -2,13 +2,13 @@
 
 #include <commctrl.h>
 #include <commdlg.h>
-#include <dwmapi.h>
 #include <shlobj.h>
+#include <shobjidl.h>
 
 #pragma comment(lib, "comctl32.lib")
-#pragma comment(lib, "dwmapi.lib")
 #pragma comment(lib, "shell32.lib")
 #pragma comment(lib, "comdlg32.lib")
+#pragma comment(lib, "ole32.lib")
 
 namespace pvnc {
 
@@ -25,23 +25,25 @@ HBRUSH editBrush() {
   return b;
 }
 
-void enableDarkTitleBar(HWND hwnd) {
-  BOOL dark = TRUE;
-  // DWMWA_USE_IMMERSIVE_DARK_MODE = 20 (1903+); older builds used 19.
-  if (FAILED(DwmSetWindowAttribute(hwnd, 20, &dark, sizeof(dark))))
-    DwmSetWindowAttribute(hwnd, 19, &dark, sizeof(dark));
+HFONT uiFont() {
+  static HFONT f = [] {
+    NONCLIENTMETRICSW ncm{};
+    ncm.cbSize = sizeof(ncm);
+    if (SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(ncm), &ncm, 0))
+      return CreateFontIndirectW(&ncm.lfMessageFont);  // Segoe UI on Win10/11
+    return (HFONT)GetStockObject(DEFAULT_GUI_FONT);
+  }();
+  return f;
 }
 
-LRESULT darkCtlColor(UINT msg, WPARAM wParam, bool& handled) {
+LRESULT themedCtlColor(UINT msg, WPARAM wParam, bool& handled) {
   handled = true;
   HDC dc = (HDC)wParam;
   switch (msg) {
     case WM_CTLCOLORSTATIC:
+      // Labels paint their text transparently over the page background.
+      SetBkMode(dc, TRANSPARENT);
       SetTextColor(dc, theme::kText);
-      SetBkColor(dc, theme::kPanel);
-      return (LRESULT)panelBrush();
-    case WM_CTLCOLORBTN:
-      SetBkColor(dc, theme::kPanel);
       return (LRESULT)panelBrush();
     case WM_CTLCOLOREDIT:
     case WM_CTLCOLORLISTBOX:
@@ -50,18 +52,17 @@ LRESULT darkCtlColor(UINT msg, WPARAM wParam, bool& handled) {
       return (LRESULT)editBrush();
   }
   handled = false;
-  return 0;
+  return 0;  // buttons etc. keep their native themed drawing
 }
 
 void applyGuiFont(HWND parent) {
-  HFONT f = (HFONT)GetStockObject(DEFAULT_GUI_FONT);
   EnumChildWindows(
       parent,
       [](HWND c, LPARAM lp) -> BOOL {
         SendMessageW(c, WM_SETFONT, (WPARAM)(HFONT)lp, TRUE);
         return TRUE;
       },
-      (LPARAM)f);
+      (LPARAM)uiFont());
 }
 
 static HMENU idMenu(int id) { return (HMENU)(INT_PTR)id; }
@@ -86,7 +87,7 @@ LRESULT CALLBACK panelProc(HWND h, UINT m, WPARAM w, LPARAM l) {
     case WM_CTLCOLOREDIT:
     case WM_CTLCOLORLISTBOX: {
       bool handled = false;
-      LRESULT r = darkCtlColor(m, w, handled);
+      LRESULT r = themedCtlColor(m, w, handled);
       if (handled) return r;
       break;
     }
@@ -147,7 +148,7 @@ HWND makeListView(HWND parent, int id, int x, int y, int w, int h) {
   HWND lv = CreateWindowExW(WS_EX_CLIENTEDGE, WC_LISTVIEWW, L"",
                             WS_CHILD | WS_VISIBLE | WS_TABSTOP | LVS_REPORT | LVS_SHOWSELALWAYS, x, y,
                             w, h, parent, idMenu(id), GetModuleHandleW(nullptr), nullptr);
-  ListView_SetExtendedListViewStyle(lv, LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES);
+  ListView_SetExtendedListViewStyle(lv, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
   ListView_SetBkColor(lv, theme::kEdit);
   ListView_SetTextBkColor(lv, theme::kEdit);
   ListView_SetTextColor(lv, theme::kText);
@@ -222,7 +223,7 @@ LRESULT CALLBACK promptProc(HWND h, UINT m, WPARAM w, LPARAM l) {
     case WM_CTLCOLORBTN:
     case WM_CTLCOLOREDIT: {
       bool handled = false;
-      LRESULT r = darkCtlColor(m, w, handled);
+      LRESULT r = themedCtlColor(m, w, handled);
       if (handled) return r;
       break;
     }
@@ -279,7 +280,6 @@ bool promptFields(HWND owner, const wchar_t* title, std::vector<Field>& fields) 
                              WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU, sx, sy, ww, wh, owner, nullptr,
                              inst, &st);
   if (!dlg) return false;
-  enableDarkTitleBar(dlg);
   EnableWindow(owner, FALSE);
   ShowWindow(dlg, SW_SHOW);
   SetForegroundWindow(dlg);
@@ -304,16 +304,38 @@ bool promptText(HWND owner, const wchar_t* title, const wchar_t* label, std::wst
 }
 
 bool pickFolder(HWND owner, const wchar_t* title, std::wstring& out) {
-  BROWSEINFOW bi{};
-  bi.hwndOwner = owner;
-  bi.lpszTitle = title;
-  bi.ulFlags = BIF_RETURNONLYFSDIRS | BIF_NEWDIALOGSTYLE;
-  LPITEMIDLIST idl = SHBrowseForFolderW(&bi);
-  if (!idl) return false;
-  wchar_t path[MAX_PATH];
-  bool ok = SHGetPathFromIDListW(idl, path);
-  CoTaskMemFree(idl);
-  if (ok) out = path;
+  // Modern Explorer-style folder picker: shows folder contents, lets you paste a
+  // path in the address bar, and remembers the last location across runs (a
+  // stable client GUID keeps its own MRU, separate from other dialogs).
+  // {A3F2C9D1-7E64-4B2A-9C13-6F0E1D5A8B42}
+  static const GUID kFolderDlgGuid = {
+      0xa3f2c9d1, 0x7e64, 0x4b2a, {0x9c, 0x13, 0x6f, 0x0e, 0x1d, 0x5a, 0x8b, 0x42}};
+
+  IFileOpenDialog* dlg = nullptr;
+  if (FAILED(CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER,
+                              IID_PPV_ARGS(&dlg))))
+    return false;
+
+  bool ok = false;
+  DWORD opts = 0;
+  dlg->GetOptions(&opts);
+  dlg->SetOptions(opts | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST);
+  dlg->SetClientGuid(kFolderDlgGuid);
+  if (title) dlg->SetTitle(title);
+
+  if (SUCCEEDED(dlg->Show(owner))) {
+    IShellItem* item = nullptr;
+    if (SUCCEEDED(dlg->GetResult(&item)) && item) {
+      PWSTR path = nullptr;
+      if (SUCCEEDED(item->GetDisplayName(SIGDN_FILESYSPATH, &path)) && path) {
+        out = path;
+        ok = true;
+        CoTaskMemFree(path);
+      }
+      item->Release();
+    }
+  }
+  dlg->Release();
   return ok;
 }
 
