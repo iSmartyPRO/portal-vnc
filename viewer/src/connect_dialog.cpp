@@ -75,7 +75,6 @@ LRESULT CALLBACK proc(HWND h, UINT m, WPARAM w, LPARAM l) {
       SetWindowTextW(st->user, st->io->user.c_str());
       SetWindowTextW(st->pass, st->io->password.c_str());
       applyFont(h);
-      SetFocus(st->io->user.empty() ? st->user : st->pass);
       return 0;
     }
     case WM_COMMAND: {
@@ -129,6 +128,11 @@ bool showConnectDialog(ConnectInfo& io) {
                              nullptr, inst, &st);
   if (!dlg) return false;
   ShowWindow(dlg, SW_SHOW);
+  SetForegroundWindow(dlg);
+  // Set keyboard focus AFTER the window is shown/active (SetFocus in WM_CREATE,
+  // before the window is visible, does not stick — which left typed input going
+  // nowhere). Focus the password field when the user is prefilled, else user.
+  SetFocus(io.user.empty() ? st.user : st.pass);
 
   MSG msg;
   while (!st.done && GetMessageW(&msg, nullptr, 0, 0) > 0) {
