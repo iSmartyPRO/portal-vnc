@@ -145,15 +145,13 @@ LRESULT CALLBACK mainProc(HWND h, UINT m, WPARAM w, LPARAM l) {
 }  // namespace
 }  // namespace pvnc
 
-#ifndef PVNC_VERSION
-#define PVNC_VERSION "0.0.0"
-#endif
-
 int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int show) {
   using namespace pvnc;
   // STA COM is required for the shell file/folder dialogs and the object picker;
-  // without it they fail with "no locations found".
-  CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+  // without it they fail with "no locations found". Only pair a successful init
+  // with CoUninitialize.
+  HRESULT coInit = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+  bool coOwned = SUCCEEDED(coInit);
   INITCOMMONCONTROLSEX icc{sizeof(icc), ICC_TAB_CLASSES | ICC_LISTVIEW_CLASSES | ICC_STANDARD_CLASSES};
   InitCommonControlsEx(&icc);
 
@@ -167,15 +165,17 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int show) {
   RegisterClassW(&wc);
 
   App app;
+  // bMenu=TRUE reserves a menu-bar row so the full kClientH client area remains
+  // below the Help menu and the bottom Agent controls aren't clipped.
   RECT r{0, 0, kClientW, kClientH};
-  AdjustWindowRect(&r, WS_OVERLAPPEDWINDOW, FALSE);
+  AdjustWindowRect(&r, WS_OVERLAPPEDWINDOW, TRUE);
   int ww = r.right - r.left, wh = r.bottom - r.top;
   int sx = (GetSystemMetrics(SM_CXSCREEN) - ww) / 2;
   int sy = (GetSystemMetrics(SM_CYSCREEN) - wh) / 2;
   HWND h = CreateWindowExW(0, L"PvncAdminMain", L"PortalVNC Agent Manager  " PVNC_VERSION,
                            WS_OVERLAPPEDWINDOW, sx, sy, ww, wh, nullptr, nullptr, inst, &app);
   if (!h) {
-    CoUninitialize();
+    if (coOwned) CoUninitialize();
     return 1;
   }
   ShowWindow(h, show);
@@ -188,6 +188,6 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int show) {
       DispatchMessageW(&msg);
     }
   }
-  CoUninitialize();
+  if (coOwned) CoUninitialize();
   return 0;
 }

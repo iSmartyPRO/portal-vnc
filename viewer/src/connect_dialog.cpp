@@ -75,8 +75,9 @@ LRESULT CALLBACK proc(HWND h, UINT m, WPARAM w, LPARAM l) {
                       ex + ew - 80, 162, 80, 28, h,
                       reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_CANCEL)), inst, nullptr);
       // Version label (bottom-left) so the build is visible before connecting.
+      // Kept narrow so it never reaches the Connect button at x=ex+ew-170.
       CreateWindowExW(0, L"STATIC", L"PortalVNC  v" PVNC_VERSION, WS_CHILD | WS_VISIBLE,
-                      lx, 168, 180, 18, h, nullptr, inst, nullptr);
+                      lx, 168, 140, 18, h, nullptr, inst, nullptr);
 
       // Prefill
       SetWindowTextW(st->host, st->io->host.c_str());
