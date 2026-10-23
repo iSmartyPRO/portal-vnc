@@ -2,6 +2,8 @@
 
 #include <windowsx.h>
 
+#include "resource.h"
+
 namespace pvnc {
 
 namespace {
@@ -48,6 +50,7 @@ bool ViewerWindow::create(const wchar_t* title) {
   wc.lpfnWndProc = &ViewerWindow::wndProc;
   wc.hInstance = GetModuleHandleW(nullptr);
   wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
+  wc.hIcon = LoadIconW(GetModuleHandleW(nullptr), MAKEINTRESOURCEW(IDI_APPICON));
   wc.lpszClassName = kClass;
   RegisterClassW(&wc);
 

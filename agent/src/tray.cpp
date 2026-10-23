@@ -4,6 +4,8 @@
 #include <shellapi.h>
 #include <commctrl.h>
 
+#include "resource.h"
+
 #pragma comment(lib, "shell32.lib")
 
 namespace pvnc {
@@ -13,7 +15,14 @@ constexpr UINT WM_TRAY = WM_APP + 10;
 constexpr UINT kIconId = 1;
 const wchar_t* kClass = L"PortalVncTrayWnd";
 
+// The PortalVNC server icon, embedded as a resource; falls back to a stock
+// computer glyph.
 HICON computerIcon() {
+  HICON ico = static_cast<HICON>(LoadImageW(GetModuleHandleW(nullptr),
+                                            MAKEINTRESOURCEW(IDI_APPICON), IMAGE_ICON,
+                                            GetSystemMetrics(SM_CXSMICON),
+                                            GetSystemMetrics(SM_CYSMICON), 0));
+  if (ico) return ico;
   SHSTOCKICONINFO sii{};
   sii.cbSize = sizeof(sii);
   if (SUCCEEDED(SHGetStockIconInfo(SIID_DESKTOPPC, SHGSI_ICON | SHGSI_SMALLICON, &sii)))

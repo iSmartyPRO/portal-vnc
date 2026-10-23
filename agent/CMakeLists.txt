@@ -20,6 +20,7 @@ target_link_libraries(pvnc_agent_core
 
 add_executable(pvnc_agent
   src/main.cpp
+  src/pvnc_agent.rc
 )
 target_link_libraries(pvnc_agent PRIVATE pvnc_agent_core)
 set_target_properties(pvnc_agent PROPERTIES OUTPUT_NAME "pvnc-agent")

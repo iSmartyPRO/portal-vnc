@@ -2,6 +2,8 @@
 
 #include <windows.h>
 
+#include "resource.h"
+
 namespace pvnc {
 
 namespace {
@@ -112,6 +114,7 @@ bool showConnectDialog(ConnectInfo& io) {
   wc.lpfnWndProc = proc;
   wc.hInstance = inst;
   wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
+  wc.hIcon = LoadIconW(inst, MAKEINTRESOURCEW(IDI_APPICON));
   wc.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_BTNFACE + 1);
   wc.lpszClassName = kClass;
   RegisterClassW(&wc);

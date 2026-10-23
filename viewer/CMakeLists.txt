@@ -3,6 +3,7 @@ add_executable(pvnc_viewer
   src/rfb_client.cpp
   src/window.cpp
   src/connect_dialog.cpp
+  src/pvnc_viewer.rc
 )
 target_include_directories(pvnc_viewer PRIVATE src)
 target_link_libraries(pvnc_viewer PRIVATE pvnc_protocol ws2_32 gdi32 user32 advapi32 shell32 comctl32)
