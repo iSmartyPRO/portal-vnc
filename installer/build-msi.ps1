@@ -8,7 +8,7 @@
 param(
   [string]$AgentExe = (Join-Path (Split-Path $PSScriptRoot -Parent) "build\agent\Release\pvnc-agent.exe"),
   [int]$Port = 7654,
-  [string]$Version = "0.1.7",
+  [string]$Version = "0.1.8",
   [string]$Out = (Join-Path $PSScriptRoot "PortalVNC.msi")
 )
 $ErrorActionPreference = "Stop"
