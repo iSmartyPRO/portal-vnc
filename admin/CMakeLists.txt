@@ -6,11 +6,13 @@ add_library(pvnc_admin_core STATIC
   src/ca.cpp
   src/keyvault.cpp
   src/configedit.cpp
+  src/agentlocate.cpp
 )
 target_include_directories(pvnc_admin_core PUBLIC src)
 target_link_libraries(pvnc_admin_core
   PUBLIC  MbedTLS::mbedtls MbedTLS::mbedx509 MbedTLS::mbedcrypto
-  PRIVATE nlohmann_json::nlohmann_json advapi32
+          pvnc_agent_core  # SvcState/queryService + SessionInfo (service.h, sessions.h)
+  PRIVATE nlohmann_json::nlohmann_json advapi32 version
 )
 
 # ---- tests ----
@@ -19,6 +21,7 @@ add_executable(pvnc_admin_tests
   test/test_ca.cpp
   test/test_keyvault.cpp
   test/test_configedit.cpp
+  test/test_agentlocate.cpp
 )
 target_link_libraries(pvnc_admin_tests PRIVATE pvnc_admin_core Catch2::Catch2WithMain
         nlohmann_json::nlohmann_json)
